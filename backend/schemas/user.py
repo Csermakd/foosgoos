@@ -7,8 +7,8 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=True)
+    hashed_password = Column(String, nullable=True)
 
     player1_matches = relationship("Match", foreign_keys='Match.player1_id')
     player2_matches = relationship("Match", foreign_keys='Match.player2_id')
