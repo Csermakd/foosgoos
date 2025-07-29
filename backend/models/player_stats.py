@@ -5,8 +5,7 @@ from database import Base
 class PlayerStats(Base):
     __tablename__ = "player_stats"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, primary_key=True, index=True)
 
     goals = Column(Integer, default=0)
     goals_from_offense = Column(Integer, default=0)
