@@ -10,7 +10,6 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     id: int
-    email: Optional[str] = None
 
     class Config:
         orm_mode = True

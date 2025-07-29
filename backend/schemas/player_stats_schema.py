@@ -11,7 +11,6 @@ class PlayerStatsCreate(PlayerStatsBase):
     pass
 
 class PlayerStats(PlayerStatsBase):
-    id: int
 
     class Config:
         orm_mode = True
