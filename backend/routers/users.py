@@ -6,6 +6,11 @@ from database import get_db
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
+@router.get("/")
+def get_user():
+    return {"message": "Get requested User"}
+
+ 
 @router.post("/")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(UserModel).filter(UserModel.name == user.name).first()
@@ -20,4 +25,3 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     return db_user
-    
