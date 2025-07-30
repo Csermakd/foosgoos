@@ -14,6 +14,7 @@ app = FastAPI()
 # routers
 app.include_router(users.router)
 app.include_router(matches.router)
+app.include_router(players_stats.router)
 
 # Allow requests from frontend (needs to be fixed)
 app.add_middleware(
@@ -24,34 +25,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ------------------------ Database connection ------------------------
-DB_FILE = "foosgoos.db"
-
-if not os.path.exists(DB_FILE):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE matches (id INTEGER PRIMARY KEY, team_a TEXT, team_b TEXT, score_a INTEGER, score_b INTEGER)''')
-    c.execute('''CREATE TABLE tournaments (id INTEGER PRIMARY KEY, name TEXT, date TEXT)''')
-    c.execute('''CREATE TABLE tips (id INTEGER PRIMARY KEY, content TEXT)''')
-    c.execute('''CREATE TABLE highlights (id INTEGER PRIMARY KEY, filepath TEXT)''')
-    c.execute('''CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT UNIQUE, is_verified INTEGER DEFAULT 0)''')
-    conn.commit()
-    conn.close()
-
 # ------------------------ models ------------------------
 
 
-class Tournament(BaseModel):
-    name: str
-    date: str  # ISO format or "YYYY-MM-DD" maybe???
+# class Tournament(BaseModel):
+#     name: str
+#     date: str  # ISO format or "YYYY-MM-DD" maybe???
 
 
-class Tip(BaseModel):
-    content: str
-
-
-class UserEmail(BaseModel):
-    email: EmailStr
+# class Tip(BaseModel):
+#     content: str
 
 # ------------------------ Email functionality ------------------------
 
@@ -84,88 +67,43 @@ def send_verification_email(email: str):
 # ------------------------ Routes ------------------------
 
 
-@app.post("/auth/register")
-def register_user(user: UserEmail, background_tasks: BackgroundTasks):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO users (email) VALUES (?)", (user.email,))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        return {"message": "Email already registered"}
-    finally:
-        conn.close()
-
-    background_tasks.add_task(send_verification_email, user.email)
-    return {"message": "Verification email sent"}
+# @app.post("/tournaments")
+# def create_tournament(tournament: Tournament):
+#     return {"message": "Tournament created", "tournament": tournament}
 
 
-@app.post("/tournaments")
-def create_tournament(tournament: Tournament):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("INSERT INTO tournaments (name, date) VALUES (?, ?)", (tournament.name, tournament.date))
-    conn.commit()
-    conn.close()
-    return {"message": "Tournament created", "tournament": tournament}
+# @app.get("/tournaments")
+# def get_tournaments():
+#     return [{"name": name, "date": date} for name, date in tournaments]
 
 
-@app.get("/tournaments")
-def get_tournaments():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT name, date FROM tournaments")
-    tournaments = c.fetchall()
-    conn.close()
-    return [{"name": name, "date": date} for name, date in tournaments]
+# @app.post("/tips")
+# def submit_tip(tip: Tip):
+#     return {"message": "Tip submitted", "tip": tip}
 
 
-@app.post("/tips")
-def submit_tip(tip: Tip):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("INSERT INTO tips (content) VALUES (?)", (tip.content,))
-    conn.commit()
-    conn.close()
-    return {"message": "Tip submitted", "tip": tip}
+# @app.get("/tips")
+# def get_tips():
+#     return [{"content": content[0]} for content in tips]
 
 
-@app.get("/tips")
-def get_tips():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT content FROM tips")
-    tips = c.fetchall()
-    conn.close()
-    return [{"content": content[0]} for content in tips]
+# @app.post("/highlights")
+# def upload_highlight(video: UploadFile = File(...)):
+#     os.makedirs("videos", exist_ok=True)
+#     file_location = f"videos/{uuid.uuid4()}_{video.filename}"
+#     with open(file_location, "wb") as f:
+#         f.write(video.file.read())
+    
+#     return {"message": "Video uploaded", "file_path": file_location}
 
 
-@app.post("/highlights")
-def upload_highlight(video: UploadFile = File(...)):
-    os.makedirs("videos", exist_ok=True)
-    file_location = f"videos/{uuid.uuid4()}_{video.filename}"
-    with open(file_location, "wb") as f:
-        f.write(video.file.read())
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("INSERT INTO highlights (filepath) VALUES (?)", (file_location,))
-    conn.commit()
-    conn.close()
-    return {"message": "Video uploaded", "file_path": file_location}
-
-
-@app.get("/highlights")
-def list_highlights():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT filepath FROM highlights")
-    highlights = c.fetchall()
-    conn.close()
-    return [filepath[0] for filepath in highlights]
+# @app.get("/highlights")
+# def list_highlights():
+#     return [filepath[0] for filepath in highlights]
 
 # ------------------------ Root ------------------------
 
 
 @app.get("/")
 def root():
-    return {"status": "Goosfoos API with SQLite and email verification is running"}
+    return {"status": "Goosfoos API with email verification is running"}
