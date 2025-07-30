@@ -14,7 +14,7 @@ Running the app locally:
   uvicorn main:app --reload
 - The backend API will be running at http://localhost:8000
 
-## Frontend (Vue)
+## Frontend (React)
 - Open a separate terminal and navigate to the `frontend` directory.
 - Install dependencies:
   ```bash
