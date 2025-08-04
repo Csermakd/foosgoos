@@ -4,12 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="784e929a-5463-4e96-a440-31a5ee77e21a" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/routers/matches.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/routers/matches.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/routers/player_stats.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/routers/player_stats.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/routers/users.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/routers/users.py" afterDir="false" />
-    </list>
+    <list default="true" id="784e929a-5463-4e96-a440-31a5ee77e21a" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
