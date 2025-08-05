@@ -4,6 +4,7 @@ from models.match import Match as MatchModel
 from schemas.match_schema import MatchCreate, Match
 from database import get_db
 from typing import List
+from datetime import datetime
 
 router = APIRouter(prefix="/matches", tags=["Matches"])
 
@@ -24,8 +25,18 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/")
-def get_match(match_id: int, db: Session = Depends(get_db)):
+def get_match(match_id: int, starttime: Optional[datetime] = None, endtime: Optional[datetime] = None, db: Session = Depends(get_db)):
     match = db.query(MatchModel).filter(MatchModel.id == match_id).first()
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
     return match
+
+    # case 2: query by given time range
+    elif starttime is not None and endtime is not None:
+        matches = db.query(MatchModel).filter(MatchModel.timestamp >= starttime, MatchModel.timestamp <= endtime).all()
+        # returns empty list if no matches found
+        return matches
+
+    # no valid parameters ig
+    else:
+        raise HTTPException(status_code=400, detail="missing 'match_id' OR both 'starttime' and 'endtime'.")
