@@ -6,9 +6,13 @@ from database import get_db
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
+
 @router.get("/")
-def get_user():
-    return {"message": "Get requested User"}
+def get_user(username: str, db: Session = Depends(get_db)):
+    db_user = db.query(UserModel).filter(UserModel.name == username).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return db_user
 
  
 @router.post("/")
