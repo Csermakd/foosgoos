@@ -5,7 +5,7 @@ from models.player_stats import PlayerStats as PlayerStatsModel
 from schemas.player_stats_schema import PlayerStats
 from database import get_db
 
-router = APIRouter(prefix="/users", tags=["Player Stats"])
+router = APIRouter(prefix="/stats", tags=["Player Stats"])
 
 
 @router.get("/users")
