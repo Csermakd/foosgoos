@@ -25,11 +25,13 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/")
-def get_match(match_id: int, starttime: Optional[datetime] = None, endtime: Optional[datetime] = None, db: Session = Depends(get_db)):
-    match = db.query(MatchModel).filter(MatchModel.id == match_id).first()
-    if not match:
-        raise HTTPException(status_code=404, detail="Match not found")
-    return match
+def get_match(match_id: Optional[int] = None, starttime: Optional[datetime] = None, endtime: Optional[datetime] = None, db: Session = Depends(get_db)):
+    if match_id is not None:
+        match = db.query(MatchModel).filter(MatchModel.id == match_id).first()
+        if not match:
+            # raise HTTPException(status_code=404, detail=f"Match with id {match_id} not found")
+            return []
+        return [match]
 
     # case 2: query by given time range
     elif starttime is not None and endtime is not None:
