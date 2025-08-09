@@ -38,6 +38,22 @@
   --chart-active-dot: #fff;
 }
 
+@keyframes gradient-x {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.hover\:animate-gradient-x:hover {
+  animation: gradient-x 5s ease infinite;
+}
+
 @theme inline {
   --color-main: var(--main);
   --color-background: var(--background);

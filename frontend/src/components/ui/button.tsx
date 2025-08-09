@@ -2,20 +2,19 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import * as React from "react"
-
-// If you have a utility function 'cn', ensure this file exists and exports it:
+import "../../styles/index.css";
 import { cn } from "../../lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-base text-sm font-base ring-offset-white transition-all gap-2 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-base text-sm font-base ring-offset-white transition-all transition-colors duration-500 gap-2 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         default:
-          "text-main-foreground bg-main border-2 border-border shadow-shadow hover:bg-rose-600 active:translate-x-boxShadowX active:translate-y-boxShadowY active:shadow-none",
+          "text-main-foreground bg-main border-2 border-border shadow-shadow hover:bg-gradient-to-r hover:from-rose-500 hover:via-purple-700 hover:to-blue-600 hover:bg-[length:400%_400%] hover:animate-gradient-x active:translate-x-boxShadowX active:translate-y-boxShadowY active:shadow-none",
         noShadow: "text-main-foreground bg-main border-2 border-border",
         neutral:
-          "bg-secondary-background text-foreground border-2 border-border shadow-shadow hover:bg-pink-300 active:translate-x-boxShadowX active:translate-y-boxShadowY active:shadow-none",
+          "bg-secondary-background text-foreground border-2 border-border shadow-shadow hover:bg-gradient-to-r hover:from-cyan-200 hover:via-emerald-300 hover:to-lime-300 hover:bg-[length:400%_400%] hover:animate-gradient-x active:translate-x-boxShadowX active:translate-y-boxShadowY active:shadow-none",
         reverse:
           "text-main-foreground bg-main border-2 border-border active:translate-x-reverseBoxShadowX active:translate-y-reverseBoxShadowY active:shadow-shadow",
       },
