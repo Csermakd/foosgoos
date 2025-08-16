@@ -6,6 +6,15 @@ export type Team = {
 
 export type Player = {
     name: string;
-    goals: number;
+    goals: {
+        goalie: number;
+        twoBar: number;
+        threeBar: number;
+        fiveBar: number;
+    };
+    record: {
+        wins: number;
+        losses: number;
+    };
     // We can add more things here later
 }
