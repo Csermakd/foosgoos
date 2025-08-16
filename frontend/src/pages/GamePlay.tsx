@@ -1,6 +1,11 @@
-type Props = {}
+import {Team} from '../types/Game'
 
-const GamePlay = (props: Props) => {
+type GamePlayPageProps = {
+    teamA: Team;
+    teamB: Team;
+}
+
+const GamePlay = (props: GamePlayPageProps) => {
   return (
     <div>Some dummy text</div>
   )
