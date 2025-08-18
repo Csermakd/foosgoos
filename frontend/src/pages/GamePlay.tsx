@@ -1,8 +1,6 @@
-import {Team} from '../types/Game'
-
 type GamePlayPageProps = {
-    teamA: Team;
-    teamB: Team;
+    //teamA: Team;
+    //teamB: Team;
 }
 
 const GamePlay = (props: GamePlayPageProps) => {
