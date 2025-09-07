@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
 import PlayerSelect from '@/components/PlayerSelect';
+import { setPlayers } from '@/features/game/gameSlice';
 
 type Props = {};
 
@@ -21,6 +24,9 @@ const CreateGame = (props: Props) => {
   const [teamBRedPlayer1, setTeamBRedPlayer1] = useState<string>('');
   const [teamBRedPlayer2, setTeamBRedPlayer2] = useState<string>('');
 
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+
   // Player selection and filtering logic
   const selectedPlayers = [teamABluePlayer1, teamABluePlayer2, teamBRedPlayer1, teamBRedPlayer2].filter(Boolean);
   const getAvailablePlayers = (currentSelection: string) => {
@@ -30,6 +36,13 @@ const CreateGame = (props: Props) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Handle navigation or state update here
+    // dispatch players to redux store
+    dispatch(setPlayers({
+      blue: [teamABluePlayer1, teamABluePlayer2],
+      red: [teamBRedPlayer1, teamBRedPlayer2],
+    }));
+    navigate('/game-play');
+
     console.log('Team A:', teamABluePlayer1, teamABluePlayer2);
     console.log('Team B:', teamBRedPlayer1, teamBRedPlayer2);
   };
