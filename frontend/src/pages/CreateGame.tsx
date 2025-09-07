@@ -5,6 +5,7 @@ import PlayerSelect from '@/components/PlayerSelect';
 
 type Props = {};
 
+//TODO: Fetch player options from redux store once implemented
 const playerOptions = [
   'Alice',
   'Bob',
@@ -20,6 +21,12 @@ const CreateGame = (props: Props) => {
   const [teamBRedPlayer1, setTeamBRedPlayer1] = useState<string>('');
   const [teamBRedPlayer2, setTeamBRedPlayer2] = useState<string>('');
 
+  // Player selection and filtering logic
+  const selectedPlayers = [teamABluePlayer1, teamABluePlayer2, teamBRedPlayer1, teamBRedPlayer2].filter(Boolean);
+  const getAvailablePlayers = (currentSelection: string) => {
+      return playerOptions.filter(player => !selectedPlayers.includes(player) || player === currentSelection);
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Handle navigation or state update here
@@ -32,25 +39,25 @@ const CreateGame = (props: Props) => {
       <form onSubmit={handleSubmit}>
         <PlayerSelect
           label="Team Blue - Player 1"
-          players={playerOptions}
+          players={getAvailablePlayers(teamABluePlayer1)}
           value={teamABluePlayer1}
           onChange={setTeamABluePlayer1}
         />
         <PlayerSelect
           label="Team Blue - Player 2"
-          players={playerOptions}
+          players={getAvailablePlayers(teamABluePlayer2)}
           value={teamABluePlayer2}
           onChange={setTeamABluePlayer2}
         />
         <PlayerSelect
           label="Team Red - Player 1"
-          players={playerOptions}
+          players={getAvailablePlayers(teamBRedPlayer1)}
           value={teamBRedPlayer1}
           onChange={setTeamBRedPlayer1}
         />
         <PlayerSelect
           label="Team Red - Player 2"
-          players={playerOptions}
+          players={getAvailablePlayers(teamBRedPlayer2)}
           value={teamBRedPlayer2}
           onChange={setTeamBRedPlayer2}
         />
