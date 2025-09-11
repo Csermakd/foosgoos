@@ -18,3 +18,8 @@ export type Player = {
     };
     // We can add more things here later
 }
+
+export type PlayerAssignment = {
+    name: string;
+    position: 'offense' | 'defense';
+}
