@@ -31,3 +31,11 @@ export type GameResult = {
     losers: [string, string];
     date: string; // ISO string
 }
+
+export type GoalEvent = {
+  team: 'blue' | 'red';
+  playerName: string;
+  position: 'offense' | 'defense';
+  goalType: '5bar' | '3bar' | 'goalie' | '2bar' | 'ownGoal';
+};
+ 
