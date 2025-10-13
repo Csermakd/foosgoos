@@ -3,15 +3,12 @@ import { Button } from "@/components/ui/button"
 import UserCreate from "./pages/UserCreate"
 import GamePlay from "./pages/GamePlay"
 import CreateGame from "./pages/CreateGame"
+import Home from "./components/Home"
 
 const router = createBrowserRouter([
   {
     path: "/",
-    element: (
-      <div className="flex min-h-svh flex-col items-center justify-center">
-        <Button>Click me</Button>
-      </div>
-    ),
+    element: <Home />,
   },
   {
     path: "/game-play",
