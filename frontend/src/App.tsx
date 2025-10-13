@@ -1,9 +1,11 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
-import { Button } from "@/components/ui/button"
 import UserCreate from "./pages/UserCreate"
 import GamePlay from "./pages/GamePlay"
 import CreateGame from "./pages/CreateGame"
 import Home from "./components/Home"
+import ViewUser from "./pages/ViewUser"
+import Leaderboards from "./pages/Leaderboards"
+import Stats from "./pages/Stats"
 
 const router = createBrowserRouter([
   {
@@ -22,6 +24,18 @@ const router = createBrowserRouter([
     path: "/create-user",
     element: <UserCreate />,
   },
+  {
+    path: "/view-user",
+    element: <ViewUser />,
+  },
+  {
+    path: "/leaderboards",
+    element: <Leaderboards />,
+  },
+  {
+    path: "/statistics",
+    element: <Stats />,
+  }
 ])
 
 function App() {

@@ -3,9 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/Card";
 
-type Props = {};
 
-const Home = (props: Props) => {
+const Home = () => {
   const navigate = useNavigate();
 
   return (
@@ -19,8 +18,8 @@ const Home = (props: Props) => {
           <Button className="flex-1" onClick={() => navigate("/create-user")}>
             Create User
           </Button>
-          <Button className="flex-1" onClick={() => navigate("/temporary")}>
-            Temporary
+          <Button className="flex-1" onClick={() => navigate("/view-user")}>
+            View User
           </Button>
         </div>
         {/* Bottom half: 2 buttons side by side */}
