@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from schemas.user_schema import UserCreate, User
 from models.user import User as UserModel
 from database import get_db
+from typing import List
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -27,3 +28,13 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+# need to fetch the list of all users (with their IDs) before the game starts,
+# in CreateGame.tsx. Then pass those IDs to the Redux state,
+# so GamePlay.tsx can use them when the match is over
+
+@router.get("/all", response_model=List[User])
+def get_all_users(db: Session = Depends(get_db)):
+    users = db.query(UserModel).all()
+    return users 

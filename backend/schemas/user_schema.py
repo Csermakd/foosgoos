@@ -3,10 +3,11 @@ from typing import Optional
 
 class UserBase(BaseModel):
     name: str
-    email: Optional[str] = None
+    # email: Optional[str] = None
 
 class UserCreate(UserBase):
-    hashed_password: Optional[str] = None
+    # hashed_password: Optional[str] = None
+    pass
 
 class User(UserBase):
     id: int
