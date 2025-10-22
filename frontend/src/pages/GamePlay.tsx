@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { type RootState } from '@/store';
 import { type PlayerAssignment, type GoalEvent } from '@/types/Game';
 import GoalModal from '@/components/GoalModal';
+import { Button } from '@/components/ui/button';
 
 const GOAL_OPTIONS = {
   offense: [
@@ -33,6 +35,8 @@ const initialGoalStats: PlayerGoalStats = {
   'ownGoal': 0,
 };
 
+const WINNING_SCORE = 10;
+
 const GamePlay = () => {
   const blueTeam: PlayerAssignment[] = useSelector((state: RootState) => state.game.blue);
   const redTeam: PlayerAssignment[] = useSelector((state: RootState) => state.game.red);
@@ -53,6 +57,9 @@ const GamePlay = () => {
     playerName: string;
     position: 'offense' | 'defense';
   } | null>(null);
+
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   // Console log event stack and player totals on change
   useEffect(() => {
@@ -147,6 +154,57 @@ const GamePlay = () => {
     }
   };
 
+  const handleFinishMatch = async () => {
+    console.log("Match finished! Submitting to backend...");
+
+    // winner
+    const winner = scores.blue > scores.red ? 'blue' : 'red';
+
+    // getting player ids from redux state and matching schema
+
+    const matchData = {
+      player1_id: blueTeam.find(p => p.position === 'offense')?.id || blueTeam[0].id, // Safely find offense, fallback to first
+      player2_id: blueTeam.find(p => p.position === 'defense')?.id || blueTeam[1].id, // Safely find defense, fallback to second
+      player3_id: redTeam.find(p => p.position === 'offense')?.id || redTeam[0].id,
+      player4_id: redTeam.find(p => p.position === 'defense')?.id || redTeam[1].id,
+      winner_team: winner,
+    };
+
+    // safety check in case IDs are missing
+    if (!matchData.player1_id || !matchData.player2_id || !matchData.player3_id || !matchData.player4_id) {
+        alert("Error: Player IDs are missing. Cannot submit match.");
+        return;
+    }
+
+    try {
+      // create_match API
+      const response = await fetch("http://localhost:8000/matches/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(matchData), // send the IDs and winner
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to submit match");
+      }
+
+      const createdMatch = await response.json();
+      console.log("Match created successfully:", createdMatch);
+      alert("Match saved!");
+      navigate('/'); // Navigate home on success
+
+    } catch (error: any) {
+      console.error("Error submitting match:", error);
+      alert('Error: ${error.message}');
+    }
+  };
+
+  const isGameOver = scores.blue >= WINNING_SCORE || scores.red >= WINNING_SCORE;
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', gap: '2rem' }}>
@@ -196,6 +254,17 @@ const GamePlay = () => {
           Rewind Last Event
         </button>
       )}
+
+      {isGameOver && (
+        <Button
+          onClick={handleFinishMatch}
+          className="mt-4"
+          style={{ backgroundColor: 'green', color: 'white' }}
+        >
+          Match Finished - Submit Score
+        </Button>
+      )}
+
       <GoalModal
         open={modalOpen}
         onClose={() => { setModalOpen(false); setModalPlayer(null); }}

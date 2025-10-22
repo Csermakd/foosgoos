@@ -21,9 +21,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     if db_user:
         raise HTTPException(status_code=400, detail="User already registered")
     db_user = UserModel(
-        name=user.name, 
-        email=user.email, 
-        hashed_password=user.hashed_password
+        name=user.name
     )
     db.add(db_user)
     db.commit()

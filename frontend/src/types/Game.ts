@@ -22,6 +22,7 @@ export type Player = {
 }
 
 export type PlayerAssignment = {
+    id: number;
     name: string;
     position: 'offense' | 'defense';
 }

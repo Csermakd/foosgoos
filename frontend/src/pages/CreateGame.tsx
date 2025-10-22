@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { Button } from '@/components/ui/button';
@@ -8,16 +8,57 @@ import FooseballTable from '../assets/Foosball Table.svg';
 import BlueTeamIcon from '../assets/blue_player.svg';
 import RedTeamIcon from '../assets/red_player.svg';
 
-// TODO: Fetch player options from redux store once implemented
-const playerOptions = ['Alice', 'Bob', 'Charlie', 'Diana', 'Ethan', 'Fiona'];
+interface User {
+  id: number;
+  name: string;
+}
 
-const CreateGame = () => {
+type Props = {};
+
+// type Position = 'offense' | 'defense';
+
+// TODO: Fetch player options from redux store once implemented
+// const playerOptions = ['Alice', 'Bob', 'Charlie', 'Diana', 'Ethan', 'Fiona'];
+
+const CreateGame = (props: Props) => {
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  
   const [bluePlayer1Name, setBluePlayer1Name] = useState<string>('');
   const [bluePlayer2Name, setBluePlayer2Name] = useState<string>('');
   const [redPlayer1Name, setRedPlayer1Name] = useState<string>('');
   const [redPlayer2Name, setRedPlayer2Name] = useState<string>('');
+
+  const [bluePlayer1Position, setBluePlayer1Position] = useState<Position>('offense');
+  const [bluePlayer2Position, setBluePlayer2Position] = useState<Position>('defense');
+  const [redPlayer1Position, setRedPlayer1Position] = useState<Position>('offense');
+  const [redPlayer2Position, setRedPlayer2Position] = useState<Position>('defense');
+
   const navigate = useNavigate();
   const dispatch = useDispatch();
+
+  // fetching users from backend when component loads
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/users/all");
+        if (!response.ok) {
+          throw new Error("Failed to fetch all users");
+        }
+        const users: User[] = await response.json();
+        setAllUsers(users);
+      }
+      catch (error) {
+        console.error(error);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  // player options are now dynamic, based on fetched user list
+
+  const playerOptions = allUsers.map(user => user.name);
+
   // Duplicate prevention: gather all selected players 
   const selectedPlayers = [bluePlayer1Name, bluePlayer2Name, redPlayer1Name, redPlayer2Name].filter(Boolean);
   const getAvailablePlayers = (currentSelection: string) =>
@@ -27,19 +68,37 @@ const CreateGame = () => {
   // Validity: all four chosen
   const allChosen =
     bluePlayer1Name && bluePlayer2Name && redPlayer1Name && redPlayer2Name;
-  const isFormValid = Boolean(allChosen);
+  
+  const bluePositionsValid =
+    [bluePlayer1Position, bluePlayer2Position].sort().join('-') ===
+    ['defense', 'offense'].sort().join('-');
+
+  const redPositionsValid =
+    [redPlayer1Position, redPlayer2Position].sort().join('-') ===
+    ['defense', 'offense'].sort().join('-');
+
+  const isFormValid = Boolean(allChosen && bluePositionsValid && redPositionsValid);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid) return;
+
+    // helper to find full user object with ID by name
+    const getUserByName = (name: string) => {
+      const user = allUsers.find(u => u.name === name);
+      if (!user) throw new Error('Could not find user ${name}');
+      return user;
+    };
+
     dispatch(
       setPlayers({
         blue: [
-          { name: bluePlayer1Name, position: 'defense' },
-          { name: bluePlayer2Name, position: 'offense' }
+            {name: bluePlayer1Name, position: bluePlayer1Position, id: getUserByName(bluePlayer1Name).id },
+            {name: bluePlayer2Name, position: bluePlayer2Position, id: getUserByName(bluePlayer2Name).id }
         ],
         red: [
-          { name: redPlayer1Name, position: 'offense' },
-          { name: redPlayer2Name, position: 'defense' }
+            {name: redPlayer1Name, position: redPlayer1Position, id: getUserByName(redPlayer1Name).id },
+            {name: redPlayer2Name, position: redPlayer2Position, id: getUserByName(redPlayer2Name).id }
         ],
       })
     );
