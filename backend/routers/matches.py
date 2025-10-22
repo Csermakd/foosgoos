@@ -14,7 +14,7 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db)):
     db_match = MatchModel(
         player1_id=match.player1_id,
         player2_id=match.player2_id,
-        player3_id=match.player3_id, 
+        player3_id=match.player3_id,
         player4_id=match.player4_id,
         winner_team=match.winner_team
     )
