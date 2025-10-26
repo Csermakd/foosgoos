@@ -1,11 +1,22 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/Card";
-
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/store";
+import { fetchAllUsers } from "@/features/user/userSlice";
 
 const Home = () => {
   const navigate = useNavigate();
+  const dispatch: AppDispatch = useDispatch();
+
+  const userStatus = useSelector((state: RootState) => state.users.status);
+
+  useEffect(() => {
+    if (userStatus === 'idle') {
+      dispatch(fetchAllUsers());
+    }
+  }, [dispatch, userStatus]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#FEFADC]">

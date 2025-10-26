@@ -3,10 +3,14 @@ import { Button } from "../components/ui/button";
 import RedPlayerTorso from "../pixel_assets/characters/red_player_torso.png";
 import BluePlayerTorso from "../pixel_assets/characters/blue_player_torso.png";
 import { useNavigate } from "react-router-dom"
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "@/store";
+import { createNewUser } from "@/features/user/userSlice";
 
 const UserCreate: React.FC = () => {
   const [username, setUsername] = useState("");
   const navigate = useNavigate();
+  const dispatch: AppDispatch = useDispatch();
 
   const handleCreateUser = async () => {
     if (!username) {
@@ -15,27 +19,13 @@ const UserCreate: React.FC = () => {
     }
 
     try {
-      const response = await fetch("http://localhost:8000/users/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: username }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to create user.");
-      }
-
-      const newUser = await response.json();
-      console.log("User created:", newUser);
-      alert('User "${newUser.name}" created successfully!');
+      await dispatch(createNewUser({ name: username })).unwrap();
+      
+      alert(`User "${username}" created successfully!`);
       navigate("/");
-    }
-    catch (error: any) {
+    } catch (error: any) {
       console.error("Error creating user:", error);
-      alert('Error: ${error.message}');
+      alert(`Error: ${error.message}`);
     }
   };
 

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { type RootState } from '@/store';
+import { type RootState, type AppDispatch } from '@/store';
 import { type PlayerAssignment, type GoalEvent } from '@/types/Game';
 import GoalModal from '@/components/GoalModal';
 import { Button } from '@/components/ui/button';
+import { createMatch } from '@/features/game/gameSlice';
 
 const GOAL_OPTIONS = {
   offense: [
@@ -58,7 +59,7 @@ const GamePlay = () => {
     position: 'offense' | 'defense';
   } | null>(null);
 
-  const dispatch = useDispatch();
+  const dispatch: AppDispatch = useDispatch();
   const navigate = useNavigate();
 
   // Console log event stack and player totals on change
@@ -177,33 +178,19 @@ const GamePlay = () => {
     }
 
     try {
-      // create_match API
-      const response = await fetch("http://localhost:8000/matches/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(matchData), // send the IDs and winner
-      });
+      // Dispatch the createMatch action
+      await dispatch(createMatch(matchData)).unwrap();
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to submit match");
-      }
-
-      const createdMatch = await response.json();
-      console.log("Match created successfully:", createdMatch);
       alert("Match saved!");
-      navigate('/'); // Navigate home on success
-
+      navigate('/'); // Navigate home
+      
     } catch (error: any) {
       console.error("Error submitting match:", error);
-      alert('Error: ${error.message}');
+      alert(`Error: ${error.message}`);
     }
   };
 
   const isGameOver = scores.blue >= WINNING_SCORE || scores.red >= WINNING_SCORE;
-  }
 
   return (
     <div>
