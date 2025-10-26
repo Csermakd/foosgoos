@@ -35,8 +35,8 @@ export interface UserCreatePayload {
 
 export const createNewUser = createAsyncThunk(
   'users/createNew',
-  async (newUser: UserCreatePayload, { dispatch }) => {
-    const response = await fetch(`${API_URL}/users/`, {
+  async (newUser: UserCreatePayload) => {
+    const response = await fetch('${API_URL}/users/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newUser),
@@ -47,8 +47,7 @@ export const createNewUser = createAsyncThunk(
       throw new Error(errorData.detail || 'Failed to create user');
     }
 
-    dispatch(fetchAllUsers()); 
-    return await response.json();
+    return await response.json() as User;
   }
 );
 
@@ -68,6 +67,19 @@ const userSlice = createSlice({
         state.users = action.payload;
       })
       .addCase(fetchAllUsers.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.error.message;
+      })
+
+      .addCase(createNewUser.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(createNewUser.fulfilled, (state, action: PayloadAction<User>) => {
+        state.status = 'succeeded';
+        state.users.push(action.payload);
+      })
+      .addCase(createNewUser.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.error.message;
       });
