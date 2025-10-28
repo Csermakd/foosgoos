@@ -1,10 +1,12 @@
 import React, { useState } from "react";
+import { useNavigate } from 'react-router-dom'
 import { Button } from "../components/ui/button";
 import RedPlayerTorso from "../pixel_assets/characters/red_player_torso.png";
 import BluePlayerTorso from "../pixel_assets/characters/blue_player_torso.png";
 
 const UserCreate: React.FC = () => {
   const [username, setUsername] = useState("");
+  const navigate = useNavigate()
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-6">
@@ -27,7 +29,7 @@ const UserCreate: React.FC = () => {
         className="border rounded px-4 py-2 text-lg"
       />
       <div className="flex gap-4">
-        <Button variant="neutral">Return Home</Button>
+        <Button variant="neutral" onClick={() => navigate('/')}>Return Home</Button>
         <Button variant="default">Create User</Button>
       </div>
     </div>

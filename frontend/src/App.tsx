@@ -4,7 +4,7 @@ import GamePlay from "./pages/GamePlay"
 import CreateGame from "./pages/CreateGame"
 import Home from "./components/Home"
 import ViewUser from "./pages/ViewUser"
-import Leaderboards from "./pages/Leaderboards"
+import Leaderboards from "./pages/LeaderBoards"
 import Stats from "./pages/Stats"
 
 const router = createBrowserRouter([
