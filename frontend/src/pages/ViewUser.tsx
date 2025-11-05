@@ -4,40 +4,47 @@ import { Button } from '../components/ui/button'
 import '../styles/ViewUser.css'
 import bluePlayer from '../assets/blue_player.svg'
 
+import { useSelector } from 'react-redux';
+import { RootState } from '@/store';
+import { User } from '@/features/user/userSlice';
+
 type Props = {}
 
-type Player = {
-  username: string
-  stats: {
-    games: number
-    wins: number
-    losses: number
-    goals: number
-  }
-}
+// type Player = {
+//   username: string
+//   stats: {
+//     games: number
+//     wins: number
+//     losses: number
+//     goals: number
+//   }
+// }
 
-const samplePlayers: Player[] = [
-  { username: 'BluePlayer1', stats: { games: 12, wins: 8, losses: 4, goals: 34 } },
-  { username: 'RedRocket', stats: { games: 20, wins: 11, losses: 9, goals: 48 } },
-  { username: 'Spinner', stats: { games: 5, wins: 2, losses: 3, goals: 7 } },
-]
+// const samplePlayers: Player[] = [
+//   { username: 'BluePlayer1', stats: { games: 12, wins: 8, losses: 4, goals: 34 } },
+//   { username: 'RedRocket', stats: { games: 20, wins: 11, losses: 9, goals: 48 } },
+//   { username: 'Spinner', stats: { games: 5, wins: 2, losses: 3, goals: 7 } },
+// ]
 
 const ViewUser = (_props: Props) => {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<Player | null>(null)
+
+  const allUsers = useSelector((state: RootState) => state.users.users);
+
+  const [selected, setSelected] = useState<User | null>(null);
   const navigate = useNavigate()
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return samplePlayers
-    return samplePlayers.filter(p => p.username.toLowerCase().includes(q))
-  }, [query])
+    if (!q) return allUsers;
+    return allUsers.filter(p => p.name.toLowerCase().includes(q));
+  }, [query, allUsers]);
 
-  function choosePlayer(p: Player) {
-    setSelected(p)
-    setIsOpen(false)
-    setQuery('')
+  function choosePlayer(p: User) {
+    setSelected(p);
+    setIsOpen(false);
+    setQuery('');
   }
 
   return (
@@ -62,8 +69,8 @@ const ViewUser = (_props: Props) => {
 
             <ul className="search-results">
               {filtered.map(p => (
-                <li key={p.username} className="search-item" onClick={() => choosePlayer(p)}>
-                  {p.username}
+                <li key={p.id} className="search-item" onClick={() => choosePlayer(p)}>
+                  {p.name}
                 </li>
               ))}
               {filtered.length === 0 && <li className="search-empty">No players found</li>}
@@ -77,7 +84,7 @@ const ViewUser = (_props: Props) => {
       </div>
 
       <div className="user-info">
-        <h2 className="username">{selected ? selected.username : 'No user selected'}</h2>
+        <h2 className="username">{selected ? selected.name : 'No user selected'}</h2>
 
         <div className="stats">
           <div className="stat-row">
@@ -102,4 +109,4 @@ const ViewUser = (_props: Props) => {
   )
 }
 
-export default ViewUser
+export default ViewUser;
