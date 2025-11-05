@@ -36,7 +36,7 @@ const initialGoalStats: PlayerGoalStats = {
   'ownGoal': 0,
 };
 
-const WINNING_SCORE = 10;
+// const WINNING_SCORE = 10;
 
 const GamePlay = () => {
   const blueTeam: PlayerAssignment[] = useSelector((state: RootState) => state.game.blue);
@@ -190,7 +190,7 @@ const GamePlay = () => {
     }
   };
 
-  const isGameOver = scores.blue >= WINNING_SCORE || scores.red >= WINNING_SCORE;
+  // const isGameOver = scores.blue >= WINNING_SCORE || scores.red >= WINNING_SCORE;
 
   return (
     <div>
@@ -242,7 +242,7 @@ const GamePlay = () => {
         </button>
       )}
 
-      {isGameOver && (
+      {
         <Button
           onClick={handleFinishMatch}
           className="mt-4"
@@ -250,7 +250,7 @@ const GamePlay = () => {
         >
           Match Finished - Submit Score
         </Button>
-      )}
+      }
 
       <GoalModal
         open={modalOpen}

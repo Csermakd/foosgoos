@@ -8,7 +8,7 @@ type TeamPlayers = {
   red: PlayerAssignment[];
 }
 
-const intialState: TeamPlayers = {
+const initialState: TeamPlayers = {
   blue: [],
   red: []
 }
@@ -24,7 +24,7 @@ interface CreateMatchPayload {
 export const createMatch = createAsyncThunk(
   'game/createMatch',
   async (matchData: CreateMatchPayload) => {
-    const response = await fetch('${API_URL}/matches/', {
+    const response = await fetch(`${API_URL}/matches/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(matchData),
@@ -40,7 +40,7 @@ export const createMatch = createAsyncThunk(
 
 const gameSlice = createSlice({
   name: 'game',
-  initialState: intialState,
+  initialState: initialState,
   reducers: {
     setPlayers(state, action: PayloadAction<TeamPlayers>) {
       state.blue = action.payload.blue;
@@ -67,5 +67,5 @@ const gameSlice = createSlice({
   }
 })
 
-export const { setPlayers } = gameSlice.actions;
+export const { setPlayers, clearGame } = gameSlice.actions;
 export default gameSlice.reducer;

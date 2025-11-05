@@ -21,7 +21,7 @@ const initialState: UserState = {
 };
 
 export const fetchAllUsers = createAsyncThunk('users/fetchAll', async () => {
-  const response = await fetch('${API_URL}/users/all');
+  const response = await fetch(`${API_URL}/users/all`);
   if (!response.ok) {
     throw new Error('Failed to fetch users');
   }
@@ -35,7 +35,11 @@ export interface UserCreatePayload {
 
 export const createNewUser = createAsyncThunk(
   'users/createNew',
+<<<<<<< HEAD
   async (newUser: UserCreatePayload, { dispatch }) => {
+=======
+  async (newUser: UserCreatePayload) => {
+>>>>>>> de29b98 (fixing errors)
     const response = await fetch(`${API_URL}/users/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
