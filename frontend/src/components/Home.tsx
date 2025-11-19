@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/Card";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "@/store";
+import { type AppDispatch, type RootState } from "@/store";
 import { fetchAllUsers } from "@/features/user/userSlice";
 
 const Home = () => {

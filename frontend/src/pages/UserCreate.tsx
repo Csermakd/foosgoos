@@ -1,16 +1,14 @@
 import React, { useState } from "react";
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import RedPlayerTorso from "../pixel_assets/characters/red_player_torso.png";
 import BluePlayerTorso from "../pixel_assets/characters/blue_player_torso.png";
-import { useNavigate } from "react-router-dom"
 import { useDispatch } from "react-redux";
-import { AppDispatch } from "@/store";
+import { type AppDispatch } from "@/store";
 import { createNewUser } from "@/features/user/userSlice";
 
 const UserCreate: React.FC = () => {
   const [username, setUsername] = useState("");
-<<<<<<< HEAD
   const navigate = useNavigate();
   const dispatch: AppDispatch = useDispatch();
 
@@ -22,7 +20,7 @@ const UserCreate: React.FC = () => {
 
     try {
       await dispatch(createNewUser({ name: username })).unwrap();
-      
+
       alert(`User "${username}" created successfully!`);
       navigate("/");
     } catch (error: any) {
@@ -30,9 +28,6 @@ const UserCreate: React.FC = () => {
       alert(`Error: ${error.message}`);
     }
   };
-=======
-  const navigate = useNavigate()
->>>>>>> 53c9c855518e11fff67e827ac32f3625a3e6986f
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-6">
@@ -51,17 +46,16 @@ const UserCreate: React.FC = () => {
         type="text"
         placeholder="Enter username"
         value={username}
-        onChange={e => setUsername(e.target.value)}
+        onChange={(e) => setUsername(e.target.value)}
         className="border rounded px-4 py-2 text-lg"
       />
       <div className="flex gap-4">
-<<<<<<< HEAD
-        <Button variant="neutral" onClick={() => navigate("/")}>Return Home</Button>
-        <Button variant="default" onClick={handleCreateUser}>Create User</Button>
-=======
-        <Button variant="neutral" onClick={() => navigate('/')}>Return Home</Button>
-        <Button variant="default">Create User</Button>
->>>>>>> 53c9c855518e11fff67e827ac32f3625a3e6986f
+        <Button variant="neutral" onClick={() => navigate("/")}>
+          Return Home
+        </Button>
+        <Button variant="default" onClick={handleCreateUser}>
+          Create User
+        </Button>
       </div>
     </div>
   );
