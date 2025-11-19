@@ -14,4 +14,7 @@ class Match(Base):
     player3_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     player4_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
+    score_blue = Column(Integer, default=0)
+    score_red = Column(Integer, default=0)
+
     winner_team = Column(SqlEnum(WinningTeamEnum), default=WinningTeamEnum.NONE)  

@@ -1,4 +1,10 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/Select";
 
 type PlayerSelectProps = {
   label: string;
@@ -7,12 +13,17 @@ type PlayerSelectProps = {
   onChange: (value: string) => void;
 };
 
-const PlayerSelect = ({ label, players, value, onChange }: PlayerSelectProps) => {
+const PlayerSelect = ({
+  label,
+  players,
+  value,
+  onChange,
+}: PlayerSelectProps) => {
   return (
-    <div>
-      <label>{label}</label>
+    <div className="w-full">
+      <label className="text-sm font-medium mb-1 block">{label}</label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-full">
+        <SelectTrigger className="w-full bg-white">
           <SelectValue placeholder="Select a player" />
         </SelectTrigger>
         <SelectContent>
@@ -24,7 +35,7 @@ const PlayerSelect = ({ label, players, value, onChange }: PlayerSelectProps) =>
         </SelectContent>
       </Select>
     </div>
-  )
-}
+  );
+};
 
 export default PlayerSelect;
