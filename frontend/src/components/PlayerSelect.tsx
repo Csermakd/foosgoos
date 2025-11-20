@@ -66,7 +66,7 @@ const PlayerSelect = ({ label, players, value, onChange }: PlayerSelectProps) =>
         </SelectContent>
       </Select>
     </div>
-  )
-}
+  );
+};
 
 export default PlayerSelect;
