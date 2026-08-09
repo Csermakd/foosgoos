@@ -1,4 +1,6 @@
+import os
 import time
+os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
 import cv2
 
 
@@ -22,7 +24,7 @@ def interrogate_camera():
 
     # Force shutter speed fast (-6 is ~1/64th sec, -7 is ~1/128th sec)
     # If the video pops up PITCH BLACK, change this to -5 or -4.
-    cap.set(cv2.CAP_PROP_EXPOSURE, -6)
+    cap.set(cv2.CAP_PROP_EXPOSURE, -5)
     # =========================================================
 
     # --- THE TRUTH SERUM ---
