@@ -3,19 +3,6 @@ Producer/consumer camera capture that avoids "phantom frames" - i.e.
 the consumer accidentally processing the same frame twice because it
 read faster than the camera actually produced a new one.
 
-WHY YOUR OLD fast_camera.py PHANTOM-FRAMES:
-Its update() thread writes self.frame in a tight loop with no signal
-for "this is new." Your ARCHITECTURE.md describes a boolean "fresh
-frame" flag as part of the design, but the actual code never
-implemented it - read() just hands back whatever self.frame currently
-is. If your inference loop is ever faster than the camera's real
-capture rate (very possible - Scout inference vs. USB/MJPEG decode
-timing drift), you get the exact same frame object handed back two+
-times in a row, and the pipeline treats it as two different
-observations: duplicate ball positions, doubled velocity estimates,
-and potentially double-counted goal events.
-
-THE FIX:
 Every captured frame gets a monotonically increasing frame_id. The
 consumer calls wait_for_frame(last_seen_id), which blocks until a
 strictly newer frame_id exists. That makes it structurally impossible
@@ -26,6 +13,7 @@ import os
 import time
 import threading
 import cv2
+import config
 
 os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
@@ -60,6 +48,12 @@ class ThreadedCamera:
             ret, frame = self.cap.read()
             if not ret:
                 continue
+            
+            # --- Digital Zoom (Crop) ---
+            if all(v is not None for v in [config.CROP_Y1, config.CROP_Y2, config.CROP_X1, config.CROP_X2]):
+                frame = frame[config.CROP_Y1:config.CROP_Y2, config.CROP_X1:config.CROP_X2]
+            # --------------------------------
+
             with self._lock:
                 self._frame = frame
                 self._frame_id += 1
@@ -100,7 +94,7 @@ class ThreadedCamera:
 if __name__ == "__main__":
     # Quick smoke test / FPS check, same spirit as your old fast_camera.py
     print("Starting fixed threaded camera stream...")
-    stream = ThreadedCamera(src=1).start()
+    stream = ThreadedCamera(src=0).start()
     time.sleep(1.0)
 
     frames = 0
