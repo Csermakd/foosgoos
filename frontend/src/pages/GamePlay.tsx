@@ -1,11 +1,20 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { type RootState, type AppDispatch } from "@/store";
-import { type GoalEvent } from "@/types/Game";
-import { createMatch } from "@/features/game/gameSlice";
+import { type GoalBar, type GoalEvent } from "@/types/Game";
+import {
+  recordGoal,
+  updateGoal,
+  deleteGoal,
+  finishMatch,
+  loadMatch,
+  swapPositions,
+} from "@/features/game/gameSlice";
+import { useMatchSocket } from "@/hooks/useMatchSocket";
 import { Button } from "@/components/ui/button";
 import PlayerCard from "@/components/PlayerCard";
+import GoalReview from "@/components/GoalReview";
 
 import FooseballTable from "../assets/foosball_table.svg";
 import BlueTeamIcon from "../assets/blue_player.svg";
@@ -20,204 +29,123 @@ type PlayerGoalStats = {
   ownGoal: number;
 };
 
-const initialGoalStats: PlayerGoalStats = {
+const emptyStats = (): PlayerGoalStats => ({
   "5bar": 0,
   "3bar": 0,
   goalie: 0,
   "2bar": 0,
   ownGoal: 0,
-};
+});
 
 const GamePlay = () => {
-  const initialBlueTeam = useSelector((state: RootState) => state.game.blue);
-  const initialRedTeam = useSelector((state: RootState) => state.game.red);
-
-  const dispatch: AppDispatch = useDispatch(); // Added dispatch
+  const dispatch: AppDispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Local state for scores
-  const [scores, setScores] = useState({ blue: 0, red: 0 });
+  const { blue, red, matchId, events, score, error, cameraConnected } =
+    useSelector((state: RootState) => state.game);
 
-  // Local state for player goals by bar
-  const [playerGoals, setPlayerGoals] = useState<
-    Record<string, PlayerGoalStats>
-  >({});
+  // Camera goals a human has explicitly skipped this session. They stay
+  // in the log (and on the scoreboard) - we just stop asking about them.
+  const [dismissed, setDismissed] = useState<number[]>([]);
 
-  // Event stack for undo/rewind
-  const [eventStack, setEventStack] = useState<GoalEvent[]>([]);
+  useMatchSocket(matchId);
 
-  // Local state to manage swappable positions
-  const [currentAssignments, setCurrentAssignments] = useState({
-    blue: initialBlueTeam,
-    red: initialRedTeam,
-  });
-
-  const blueDefense = currentAssignments.blue.find(
-    (p) => p.position === "defense"
-  );
-  const blueOffense = currentAssignments.blue.find(
-    (p) => p.position === "offense"
-  );
-  const redDefense = currentAssignments.red.find(
-    (p) => p.position === "defense"
-  );
-  const redOffense = currentAssignments.red.find(
-    (p) => p.position === "offense"
-  );
-
-  // Debugging logs
+  // A browser refresh mid-game used to lose everything, because the score
+  // lived in useState. Now the match is on the server, so re-fetch it.
   useEffect(() => {
-    console.log("Event Stack:", eventStack);
-    console.log("Player Goals:", playerGoals);
-  }, [eventStack, playerGoals]);
+    if (matchId !== null && events.length === 0) {
+      dispatch(loadMatch(matchId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
 
-  const handleSwitchSides = (team: "blue" | "red") => {
-    setCurrentAssignments((prev) => {
-      const teamPlayers = prev[team];
-      const newTeamPlayers = teamPlayers.map((player) => {
-        if (player.position === "offense")
-          return { ...player, position: "defense" };
-        if (player.position === "defense")
-          return { ...player, position: "offense" };
-        return player;
-      });
-      return { ...prev, [team]: newTeamPlayers };
-    });
-  };
+  const blueDefense = blue.find((p) => p.position === "defense");
+  const blueOffense = blue.find((p) => p.position === "offense");
+  const redDefense = red.find((p) => p.position === "defense");
+  const redOffense = red.find((p) => p.position === "offense");
+
+  /** Per-player tallies, derived from the goal log rather than tracked
+   *  alongside it - so corrections and undos are automatically reflected. */
+  const playerGoals = useMemo(() => {
+    const table: Record<number, PlayerGoalStats> = {};
+    for (const event of events) {
+      if (event.status === "rejected" || event.player_id === null) continue;
+      const stats = (table[event.player_id] ??= emptyStats());
+      if (event.own_goal) stats.ownGoal += 1;
+      else if (event.bar !== "unknown") stats[event.bar] += 1;
+    }
+    return table;
+  }, [events]);
+
+  /** Camera goals still waiting on "who scored?". */
+  const needsReview: GoalEvent[] = useMemo(
+    () =>
+      events.filter(
+        (e) =>
+          e.source === "camera" &&
+          e.status === "pending_review" &&
+          !dismissed.includes(e.id)
+      ),
+    [events, dismissed]
+  );
+  const reviewing = needsReview[0];
 
   const handleGoalRecord = (
-    playerName: string,
-    position: "offense" | "defense",
-    goalType: GoalEvent["goalType"]
+    playerId: number,
+    _position: "offense" | "defense",
+    goalType: GoalBar | "ownGoal"
   ) => {
-    // Check team based on initial assignment (teams don't change, only positions)
-    const team = initialBlueTeam.some((p) => p.name === playerName)
-      ? "blue"
-      : "red";
-
-    const event: GoalEvent = { team, playerName, position, goalType };
-    setEventStack((prev) => [...prev, event]);
-
-    // Score logic
-    if (goalType === "ownGoal") {
-      const opponent = team === "blue" ? "red" : "blue";
-      setScores((prev) => ({ ...prev, [opponent]: prev[opponent] + 1 }));
-      setPlayerGoals((prev) => ({
-        ...prev,
-        [playerName]: {
-          ...(prev[playerName] || { ...initialGoalStats }),
-          ownGoal: (prev[playerName]?.ownGoal || 0) + 1,
-        },
-      }));
-    } else {
-      setScores((prev) => ({ ...prev, [team]: prev[team] + 1 }));
-      setPlayerGoals((prev) => ({
-        ...prev,
-        [playerName]: {
-          ...(prev[playerName] || { ...initialGoalStats }),
-          [goalType]: (prev[playerName]?.[goalType] || 0) + 1,
-        },
-      }));
-    }
+    if (matchId === null) return;
+    const team = blue.some((p) => p.id === playerId) ? "blue" : "red";
+    const ownGoal = goalType === "ownGoal";
+    dispatch(
+      recordGoal({
+        matchId,
+        // An own goal puts the point on the OTHER team's board, but stays
+        // attributed to the player who scored it.
+        team: ownGoal ? (team === "blue" ? "red" : "blue") : team,
+        playerId,
+        bar: ownGoal ? "unknown" : (goalType as GoalBar),
+        ownGoal,
+      })
+    );
   };
 
   const handleRewind = () => {
-    if (eventStack.length === 0) return;
-    const lastEvent = eventStack[eventStack.length - 1];
-    setEventStack((prev) => prev.slice(0, -1));
-
-    if (lastEvent.goalType === "ownGoal") {
-      const opponent = lastEvent.team === "blue" ? "red" : "blue";
-      setScores((prev) => ({
-        ...prev,
-        [opponent]: Math.max(prev[opponent] - 1, 0),
-      }));
-      setPlayerGoals((prev) => ({
-        ...prev,
-        [lastEvent.playerName]: {
-          ...(prev[lastEvent.playerName] || { ...initialGoalStats }),
-          ownGoal: Math.max((prev[lastEvent.playerName]?.ownGoal || 1) - 1, 0),
-        },
-      }));
-    } else {
-      setScores((prev) => ({
-        ...prev,
-        [lastEvent.team]: Math.max(prev[lastEvent.team] - 1, 0),
-      }));
-      setPlayerGoals((prev) => ({
-        ...prev,
-        [lastEvent.playerName]: {
-          ...(prev[lastEvent.playerName] || { ...initialGoalStats }),
-          [lastEvent.goalType]: Math.max(
-            (prev[lastEvent.playerName]?.[lastEvent.goalType] || 1) - 1,
-            0
-          ),
-        },
-      }));
-    }
+    if (matchId === null || events.length === 0) return;
+    const last = events[events.length - 1];
+    dispatch(deleteGoal({ matchId, eventId: last.id }));
   };
 
-  const handleFinishMatch = async () => {
-    if (!blueDefense || !blueOffense || !redDefense || !redOffense) return;
-
-    const winner: "blue" | "red" | "NONE" =
-      scores.blue > scores.red
-        ? "blue"
-        : scores.red > scores.blue
-        ? "red"
-        : "NONE";
-
-    // 1. Calculate stats for each player
-    const calculatePlayerStats = (playerId: number, playerName: string) => {
-      const stats = playerGoals[playerName] || initialGoalStats;
-      return {
-        user_id: playerId,
-        goals:
-          (stats["5bar"] || 0) +
-          (stats["3bar"] || 0) +
-          (stats["goalie"] || 0) +
-          (stats["2bar"] || 0),
-        goals_from_offense: (stats["5bar"] || 0) + (stats["3bar"] || 0),
-        goals_from_defense: (stats["goalie"] || 0) + (stats["2bar"] || 0),
-        saves: 0,
-      };
-    };
-
-    const playerStatsList = [
-      calculatePlayerStats(blueOffense.id, blueOffense.name),
-      calculatePlayerStats(blueDefense.id, blueDefense.name),
-      calculatePlayerStats(redOffense.id, redOffense.name),
-      calculatePlayerStats(redDefense.id, redDefense.name),
-    ];
-
-    const matchData = {
-      player1_id: blueOffense.id,
-      player2_id: blueDefense.id,
-      player3_id: redOffense.id,
-      player4_id: redDefense.id,
-      winner_team: winner,
-      score_blue: scores.blue,
-      score_red: scores.red,
-      player_stats: playerStatsList,
-    };
-
+  const handleFinish = async () => {
+    if (matchId === null) return;
+    if (needsReview.length > 0) {
+      const proceed = window.confirm(
+        `${needsReview.length} goal(s) the camera detected have not been ` +
+          `attributed to a player. They will count towards the team score ` +
+          `but not towards anyone's personal stats. Finish anyway?`
+      );
+      if (!proceed) return;
+    }
     try {
-      await dispatch(createMatch(matchData)).unwrap();
-      alert(`Match Saved! Winner: ${winner.toUpperCase()}`);
+      const match = await dispatch(finishMatch({ matchId })).unwrap();
+      alert(
+        `Match saved. ${match.score_blue}-${match.score_red}, ` +
+          `winner: ${match.winner_team.toUpperCase()}`
+      );
       navigate("/");
-    } catch (error: any) {
-      console.error("Error submitting match:", error);
-      alert(`Error saving match: ${error.message}`);
+    } catch (err: any) {
+      alert(`Could not save the match: ${err.message}`);
     }
   };
 
-  if (!blueDefense || !blueOffense || !redDefense || !redOffense) {
+  if (matchId === null || !blueDefense || !blueOffense || !redDefense || !redOffense) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
         <p className="text-red-500 font-bold">
-          Error loading players. Did you start the game correctly?
+          No match in progress. Start one from the Create Game screen.
         </p>
-        <Button onClick={() => navigate("/")}>Go Back</Button>
+        <Button onClick={() => navigate("/create-game")}>Start a game</Button>
       </div>
     );
   }
@@ -227,47 +155,63 @@ const GamePlay = () => {
       {/* Blue Team */}
       <div className="flex flex-col items-center gap-8 flex-1">
         <h2 className="text-4xl font-black text-blue-400 drop-shadow-md">
-          {scores.blue}
+          {score.blue}
         </h2>
         <PlayerCard
           player={blueDefense}
           teamIcon={BlueTeamIcon}
-          stats={playerGoals[blueDefense.name] || initialGoalStats}
+          stats={playerGoals[blueDefense.id] ?? emptyStats()}
           onGoal={handleGoalRecord}
         />
         <Button
           variant="neutral"
           size="icon"
-          onClick={() => handleSwitchSides("blue")}
+          onClick={() => dispatch(swapPositions("blue"))}
         >
           <img src={SwitchIcon} alt="Switch Blue Team" className="w-6 h-6" />
         </Button>
         <PlayerCard
           player={blueOffense}
           teamIcon={BlueTeamIcon}
-          stats={playerGoals[blueOffense.name] || initialGoalStats}
+          stats={playerGoals[blueOffense.id] ?? emptyStats()}
           onGoal={handleGoalRecord}
         />
       </div>
 
-      {/* Center Column */}
+      {/* Center */}
       <div className="flex flex-col items-center justify-center flex-2">
+        <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wide">
+          <span
+            className={`inline-block w-2 h-2 rounded-full ${
+              cameraConnected ? "bg-green-400" : "bg-gray-400"
+            }`}
+          />
+          <span className="text-white/80">
+            {cameraConnected ? "Live — camera assisted" : "Manual only"}
+          </span>
+        </div>
+
         <img
           src={FooseballTable}
           alt="Foosball Table"
           className="w-full max-w-xl h-auto drop-shadow-2xl"
         />
+
+        {error && (
+          <p className="mt-4 text-sm font-bold text-red-300">{error}</p>
+        )}
+
         <div className="flex gap-4 mt-8 w-full max-w-xl">
           <Button
             onClick={handleRewind}
-            disabled={eventStack.length === 0}
+            disabled={events.length === 0}
             className="flex-1"
             variant="neutral"
           >
             Rewind
           </Button>
           <Button
-            onClick={handleFinishMatch}
+            onClick={handleFinish}
             className="flex-1 bg-green-600 hover:bg-green-700 text-white border-none"
           >
             Finish Match
@@ -278,28 +222,54 @@ const GamePlay = () => {
       {/* Red Team */}
       <div className="flex flex-col items-center gap-8 flex-1">
         <h2 className="text-4xl font-black text-red-400 drop-shadow-md">
-          {scores.red}
+          {score.red}
         </h2>
         <PlayerCard
           player={redOffense}
           teamIcon={RedTeamIcon}
-          stats={playerGoals[redOffense.name] || initialGoalStats}
+          stats={playerGoals[redOffense.id] ?? emptyStats()}
           onGoal={handleGoalRecord}
         />
         <Button
           variant="neutral"
           size="icon"
-          onClick={() => handleSwitchSides("red")}
+          onClick={() => dispatch(swapPositions("red"))}
         >
           <img src={SwitchIcon} alt="Switch Red Team" className="w-6 h-6" />
         </Button>
         <PlayerCard
           player={redDefense}
           teamIcon={RedTeamIcon}
-          stats={playerGoals[redDefense.name] || initialGoalStats}
+          stats={playerGoals[redDefense.id] ?? emptyStats()}
           onGoal={handleGoalRecord}
         />
       </div>
+
+      {reviewing && (
+        <GoalReview
+          event={reviewing}
+          roster={{ blue, red }}
+          onAssign={(playerId, bar) =>
+            dispatch(
+              updateGoal({
+                matchId,
+                eventId: reviewing.id,
+                changes: { player_id: playerId, bar, status: "confirmed" },
+              })
+            )
+          }
+          onReject={() =>
+            dispatch(
+              updateGoal({
+                matchId,
+                eventId: reviewing.id,
+                changes: { status: "rejected" },
+              })
+            )
+          }
+          onDismiss={() => setDismissed((prev) => [...prev, reviewing.id])}
+        />
+      )}
     </div>
   );
 };

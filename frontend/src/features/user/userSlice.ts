@@ -4,18 +4,13 @@ import {
   type PayloadAction,
 } from "@reduxjs/toolkit";
 
+import { type User } from "@/types/Game";
+
 const API_URL = import.meta.env.VITE_API_URL;
 
-export interface User {
-  id: number;
-  name: string;
-  stats?: {
-    goals: number;
-    goals_from_offense: number;
-    goals_from_defense: number;
-    saves: number;
-  };
-}
+// Re-exported from types/Game rather than redeclared: two copies of this
+// shape drifted apart the moment the backend grew new stat fields.
+export type { User };
 
 // the state for slice
 interface UserState {

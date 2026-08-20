@@ -3,16 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Button } from "@/components/ui/button";
 import PlayerSelect from "@/components/PlayerSelect";
-import { setPlayers } from "@/features/game/gameSlice";
+import {
+  startMatch,
+  resumeActiveMatch,
+  abandonMatch,
+  fetchActiveMatch,
+} from "@/features/game/gameSlice";
 // UPDATED: Removed space from filename import
 import FooseballTable from "../assets/foosball_table.svg";
 import BlueTeamIcon from "../assets/blue_player.svg";
 import RedTeamIcon from "../assets/red_player.svg";
-import { type RootState } from "@/store";
+import { type RootState, type AppDispatch } from "@/store";
 
-type Props = {};
-
-const CreateGame = (props: Props) => {
+const CreateGame = () => {
   // Updated selector to match userSlice structure
   const { users: allUsers, status } = useSelector(
     (state: RootState) => state.users
@@ -24,7 +27,13 @@ const CreateGame = (props: Props) => {
   const [redPlayer2Name, setRedPlayer2Name] = useState<string>("");
 
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const dispatch: AppDispatch = useDispatch();
+  const [submitting, setSubmitting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  // Set when a previous game was never finished - a closed tab, a crash,
+  // someone wandering off. Without a way out of this, every future
+  // "Start Game" would fail with a 409 and no obvious remedy.
+  const [strandedMatch, setStrandedMatch] = useState<number | null>(null);
 
   const playerOptions = allUsers.map((user) => user.name);
 
@@ -45,9 +54,17 @@ const CreateGame = (props: Props) => {
 
   const isFormValid = Boolean(allChosen);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  /**
+   * Starting a game now creates the match on the SERVER first, before
+   * anyone plays a point. That is what gives the camera something to
+   * attach goals and a video recording to - the vision service polls
+   * /matches/active and starts working the moment this succeeds.
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
+    if (!isFormValid || submitting) return;
+    setSubmitting(true);
+    setStartError(null);
 
     const getUserByName = (name: string) => {
       const user = allUsers.find((u) => u.name === name);
@@ -57,8 +74,8 @@ const CreateGame = (props: Props) => {
     };
 
     try {
-      dispatch(
-        setPlayers({
+      await dispatch(
+        startMatch({
           blue: [
             {
               name: bluePlayer1Name,
@@ -84,11 +101,45 @@ const CreateGame = (props: Props) => {
             },
           ],
         })
-      );
+      ).unwrap();
       navigate("/game-play");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error starting game. Please refresh and try again.");
+      setStartError(
+        err?.message ?? "Could not start the game. Is the backend running?"
+      );
+      // The most likely cause by far is a game somebody never finished.
+      // Ask the server directly rather than parsing the error text - the
+      // wording of a message is not an API.
+      try {
+        const active = await dispatch(fetchActiveMatch()).unwrap();
+        setStrandedMatch(active ? active.id : null);
+      } catch {
+        setStrandedMatch(null);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResume = async () => {
+    try {
+      await dispatch(resumeActiveMatch(allUsers)).unwrap();
+      navigate("/game-play");
+    } catch (err: any) {
+      setStartError(err?.message ?? "Could not resume that game");
+      setStrandedMatch(null);
+    }
+  };
+
+  const handleAbandon = async () => {
+    if (strandedMatch === null) return;
+    try {
+      await dispatch(abandonMatch(strandedMatch)).unwrap();
+      setStartError(null);
+      setStrandedMatch(null);
+    } catch (err: any) {
+      setStartError(err?.message ?? "Could not abandon that game");
     }
   };
 
@@ -147,8 +198,45 @@ const CreateGame = (props: Props) => {
               Pick all four players.
             </p>
           )}
-          <Button type="submit" disabled={!isFormValid} className="w-full">
-            Start Game
+          {startError && (
+            <div className="mb-4 rounded-md border-2 border-red-300 bg-red-50 p-3">
+              <p className="text-sm text-red-700 font-bold text-center">
+                {startError}
+              </p>
+              {strandedMatch !== null && (
+                <>
+                  <p className="text-xs text-red-700/80 text-center mt-1">
+                    Somebody left a game open. Pick it back up, or throw it
+                    away and start fresh.
+                  </p>
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      type="button"
+                      variant="neutral"
+                      className="flex-1"
+                      onClick={handleResume}
+                    >
+                      Resume that game
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="neutral"
+                      className="flex-1 text-red-600"
+                      onClick={handleAbandon}
+                    >
+                      Abandon it
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <Button
+            type="submit"
+            disabled={!isFormValid || submitting}
+            className="w-full"
+          >
+            {submitting ? "Starting..." : "Start Game"}
           </Button>
         </form>
       </div>

@@ -3,22 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Button } from "@/components/ui/button";
 import { type RootState } from "@/store";
-
-type MatchRecord = {
-  id: number;
-  timestamp: string;
-  winner_team: "blue" | "red" | "NONE";
-  score_blue: number;
-  score_red: number;
-  player1_id: number;
-  player2_id: number;
-  player3_id: number;
-  player4_id: number;
-};
+import { type Match } from "@/types/Game";
 
 const Stats = () => {
   const navigate = useNavigate();
-  const [matches, setMatches] = useState<MatchRecord[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 1. Get the list of users from Redux so we can translate IDs to Names
@@ -33,7 +22,12 @@ const Stats = () => {
   useEffect(() => {
     const fetchMatches = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/matches/`);
+        // Only finished games. Matches now exist from the moment the
+        // players are picked, so an unfiltered fetch would list the game
+        // being played right now - and any abandoned one - as a result.
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/matches/?status=completed`
+        );
         if (res.ok) {
           const data = await res.json();
           setMatches(data);

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from schemas.player_stats_schema import PlayerStats
 
@@ -14,5 +14,4 @@ class User(UserBase):
     id: int
     stats: Optional[PlayerStats] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
