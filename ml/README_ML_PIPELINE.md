@@ -1,207 +1,372 @@
 # Foosgoos ML Pipeline
 
-This is the brain of the ref. Everything in here is about turning raw camera
-frames into a `GOAL` event. It doesn't know or care about the backend/frontend —
-it just watches the table and yells when the ball goes in.
+Everything that turns camera frames into a `GOAL` event. It knows nothing
+about the database or the UI — it watches the table and POSTs to the API.
 
-## Quick mental model before we touch anything
+---
 
-```
-record frames → mark them up in Roboflow → train on Modal → drop new best.pt in
-```
-
-The model that's actually running during a match is frozen. It doesn't update
-itself mid-game - it's just doing inference (predicting) at ~90fps using
-whatever weights we last gave it. All the "learning" happens offline, in that
-loop above, which we run once to get started and then again every so often as
-we collect more footage.
-
-First batch, we have to label everything by hand - YOLO is supervised, no way
-around it. But once we've got a decent first model, we can use it to
-pre-label new frames automatically and just fix its mistakes in Roboflow,
-which is way faster than starting from a blank frame. That's the closest
-thing to "continuous learning" we get, and honestly it's enough.
-
-## Where this folder lives
-
-Don't nest this inside `backend/`. The backend already has (or will have) a
-`models/` package for the SQLAlchemy tables - this project also has a
-`models/` folder, but for `.pt` weight files. Same name, totally different
-thing, guaranteed to confuse someone at 1am. Keep them as siblings:
+## The mental model, before touching anything
 
 ```
-foosgoos/
-├── backend/         (app.py, database.py, routers/, models/ = DB tables)
-├── frontend/         (Home.tsx, GoalModal.tsx, etc.)
-└── ml/                <- this folder goes here
-    ├── config.py
-    ├── camera/
-    ├── data_collection/
-    ├── training/
-    ├── inference/
-    ├── models/        <- .pt weight files land here
-    └── datasets/       <- raw collected frames land here
+record matches → extract frames → label in Roboflow → train on Modal → drop new best.pt in
+       ↑                                                                        │
+       └──────────────── play more games, look at what it got wrong ────────────┘
 ```
 
-`ml/` never imports from `backend/` or vice versa. They only talk over HTTP -
-`on_goal_detected()` POSTs to the FastAPI matches route. Keeps things clean:
-we can rip out and swap the entire vision stack without touching the API, and
-vice versa.
+The model running during a match is **frozen**. It does not learn as it
+watches. It runs inference with whatever weights we last handed it. All
+learning happens offline, in that loop.
 
-## What's in this folder
+Two things do the actual thinking, and it is worth being clear about
+which is which:
+
+| | What it is | What it decides |
+|---|---|---|
+| **The models** | Two YOLOv8 networks | *Where is the ball, in pixels? Where are the table corners?* |
+| **The logic** | Plain Python in `inference/` | *Was that a goal? For whom?* |
+
+Nobody trains a network to understand foosball rules. Goals are `if`
+statements with thresholds we measure. That is why the tests in `tests/`
+can verify the goal logic with no camera, no GPU and no weights.
+
+---
+
+## What is in here
 
 ```
 ml/
-  config.py                          all the tunable constants in one place
-  camera/threaded_camera.py          fixed camera capture (no more phantom frames)
-  data_collection/record_dataset.py  grabs frames for us to go mark up
-  training/train_architect_modal.py  trains the keypoint model on Modal
-  training/train_scout_modal.py      trains the object detector on Modal
-  inference/homography.py            keypoints -> flat table coordinates
-  inference/zones.py                 goal-line and bar-zone math
-  inference/game_state.py            ball tracking -> debounced goal events
-  inference/live_pipeline.py         the script we actually run during a game
-  requirements.txt
+  config.py                     every tunable constant, one file
+  backend_client.py             HTTP to FastAPI, with an on-disk retry queue
+  vision_service.py             ** the thing you run during matches **
+
+  camera/threaded_camera.py     live capture + VideoFileSource for replay
+  recording/session_recorder.py records every match to disk, off-thread
+
+  inference/
+    homography.py               4 corners -> flat table coordinates
+    zones.py                    goal lines and rod geometry
+    game_state.py               ball trajectory -> debounced goal events
+    pipeline.py                 the per-frame core, shared live and offline
+    live_pipeline.py            watch-and-print runner, for tuning
+
+  tools/
+    calibrate_corners.py        click 4 corners, save calibration.json
+    watch_ball.py               read normalized coordinates, tune goal lines
+
+  data_collection/
+    record_dataset.py           manual stills (still right for the table set)
+    extract_frames.py           pull training stills out of recorded matches
+
+  training/
+    dataset_check.py            validate an export BEFORE spending GPU time
+    train_scout_modal.py        ball detector
+    train_architect_modal.py    table-corner keypoints
+
+  evaluation/evaluate_goals.py  replay footage, score it against real goals
+  tests/                        goal logic tests - no hardware needed
 ```
 
-## Setup (once, per machine)
+`ml/` never imports from `backend/`, and `backend/` never imports from
+`ml/`. They talk over HTTP. Either side can be rewritten without the
+other noticing.
+
+---
+
+## Setup (once per machine)
 
 ```bash
 cd ml
 python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+python -m pytest tests -q       # should pass with no camera attached
 ```
 
-## Step 1 - Make sure the camera fix actually works
+Per-machine settings come from environment variables so this checked-in
+config works everywhere:
 
-Old `fast_camera.py` had no way for the reader to know if a frame was
-actually new - under load it'd hand back the same frame twice, which is
-where the phantom frames came from. `camera/threaded_camera.py` fixes this
-with a frame-id + blocking `wait_for_frame()`, so we structurally can't
-process the same frame twice no matter how fast/slow the loops drift
-relative to each other.
+```bash
+export FOOSGOOS_API_URL=http://192.168.1.42:8000   # where uvicorn runs
+export FOOSGOOS_CAMERA_INDEX=0                     # try 0, 1, 2
+export FOOSGOOS_CAMERA_BACKEND=msmf                # auto-detected; override if needed
+```
 
-Test it standalone before building on top of it:
+---
+
+## Step 1 — Prove the camera works
 
 ```bash
 python -m camera.threaded_camera
 ```
 
-We should see a steady, believable FPS number ticking in the console - not
-suspiciously identical readings frame after frame. `q` to quit the preview.
-If the camera won't open, check `config.CAMERA_INDEX` - it's set to `1`,
-try `0` or `2` if that's wrong on your machine.
+You want a **steady, believable** FPS that moves around a little. A
+number that never changes means something is handing back stale frames.
 
-## Step 2 - Go collect data
+The capture backend is now chosen by OS (`msmf` on Windows,
+`avfoundation` on macOS, `v4l2` on Linux). The first draft hardcoded
+Windows' backend, so the camera silently refused to open anywhere else.
 
-This is the part where we actually point the camera at the table and start
-generating the raw images we'll mark up later. Two modes:
+If it will not open, the error message lists what to try. If frames are
+**dark**, add light — do not raise `EXPOSURE` towards zero. A slower
+shutter smears the ball into a streak precisely during the fast shots
+that become goals, and that is much harder to fix later than a lamp.
+
+---
+
+## Step 2 — Calibrate the table (5 minutes, no ML)
 
 ```bash
-# Empty table - walk it around from different angles/heights/distances.
-# SPACE to save a frame, q to quit. Aim for 100+ frames.
-python -m data_collection.record_dataset --mode table --out datasets/raw/table
-
-# During a real game - auto-saves every 0.5s while we play. Aim for 300+.
-python -m data_collection.record_dataset --mode gameplay --out datasets/raw/gameplay --interval 0.5
+python -m tools.calibrate_corners
 ```
 
-Run the `gameplay` command any time we're about to play - just leave it
-running in the background, play normally, hit `q` when we're done. Frames
-pile up as `.jpg` files in `datasets/raw/gameplay/`. Lower `--interval` for
-faster/more chaotic games, but don't go too low - near-duplicate frames just
-bloat the amount we have to mark up later without adding real variety.
+Freeze a frame, click the four corners in order — **top-left, top-right,
+bottom-right, bottom-left** — and it writes `calibration.json`. That is
+the homography: the thing that converts camera pixels into flat table
+coordinates where x runs 0.0 (blue goal) → 1.0 (red goal).
 
-## Step 3 - Marking it up (this part's not code, it's Roboflow)
+This unblocks everything downstream without waiting on a trained model.
 
-Head to roboflow.com and set up **two separate projects** - matches the
-two-model split in ARCHITECTURE.md:
+**Our table moves most days**, so this goes stale. Two options: re-click
+it when the table has been nudged, or train the Architect model (Step 6),
+which re-finds the corners by itself every ten seconds. Start by
+re-clicking; train the Architect when re-clicking gets annoying.
 
-1. **"Foosgoos-Architect"** -> project type **Keypoint Detection**.
-   Upload everything from `datasets/raw/table/`. On each image, place 4
-   points, always in this exact order: `top-left -> top-right -> bottom-right
-   -> bottom-left`. Order has to match `config.ARCHITECT_KEYPOINTS` exactly
-   or the homography math downstream will be scrambled.
+---
 
-2. **"Foosgoos-Scout"** -> project type **Object Detection**.
-   Upload everything from `datasets/raw/gameplay/`. Draw a tight box around
-   the ball and around each visible player piece per frame - use the class
-   names already sitting in `config.SCOUT_CLASSES`, don't invent new ones.
-
-For both projects: generate a version with a 70/20/10 train/val/test split,
-keep augmentation light (small rotation, small brightness/contrast shifts
-only - the camera's bolted down, so heavy geometric augmentation just
-teaches the model for situations it'll never actually see). Export as
-**YOLOv8** (pick "YOLOv8 Pose" for Architect specifically). Download the zip.
-
-## Step 4 - Train it on Modal (cloud GPU, not our laptops)
+## Step 3 — Measure your goal lines
 
 ```bash
-modal token new                    # one-time auth, once per person's machine
+python -m tools.watch_ball --no-model
+```
 
-modal volume create foosgoos-architect-data
-modal volume put foosgoos-architect-data ./architect_dataset /data   # the Roboflow export, unzipped
-modal run training/train_architect_modal.py
+Click points on the frozen frame; it prints their normalized
+coordinates. Click the goal line at each end, then the two edges of each
+goal mouth. Put what you measure into `config.py`:
+
+```python
+GOAL_LINE_BLUE = 0.03     # ball crossing below this -> RED scored
+GOAL_LINE_RED  = 0.97     # ball crossing above this -> BLUE scored
+GOAL_MOUTH_Y_MIN = 0.30   # the goal is not the full width of the end
+GOAL_MOUTH_Y_MAX = 0.70
+```
+
+The values shipped in `config.py` are placeholders from an example in
+ARCHITECTURE.md. **They are wrong for our table.** Wrong goal lines mean
+missed goals or phantom ones, and no amount of model training fixes that.
+
+---
+
+## Step 4 — Collect data by just playing
+
+Turn recording on and play normally:
+
+```bash
+python -m vision_service --dry-run --preview     # before any model exists
+```
+
+Better: once the app's start/finish flow is wired up (it is), every match
+someone plays through the app records itself. The vision service polls
+`/matches/active`, and when a game starts it records video and writes a
+sidecar frame index next to it.
+
+**Record whole matches, not sampled stills.** The old `--mode gameplay`
+saved one jpg every 0.5s and discarded the other 179 frames — and the
+discarded ones are the fast, motion-blurred frames around goals, which
+are exactly what the detector most needs to learn. You cannot go back and
+capture frames you never saved.
+
+The one thing still worth capturing by hand is the **empty table** for
+the Architect:
+
+```bash
+python -m data_collection.record_dataset --mode table --out datasets/raw/table
+```
+
+~100 frames: every corner, high and low angles, lights on and off.
+
+---
+
+## Step 5 — Extract and label
+
+```bash
+python -m data_collection.extract_frames --match 42
+```
+
+Pulls every 20th frame plus a dense burst around each recorded goal —
+it knows where the goals were because the app stored a `video_ts_ms` on
+every one of them. Free ground truth from ordinary play.
+
+Then in Roboflow:
+
+**"Foosgoos-Scout"** → Object Detection. Upload the extracted frames.
+Label the **ball only**. One class.
+
+> The original plan had eleven classes — the ball plus ten rod variants.
+> Telling a 5-bar man from a 3-bar man from directly overhead is hard for
+> a *human*, it triples the labelling time per frame, and the goal logic
+> does not use it. One class gets you a working referee. Add more once
+> the ball detector is solid and you want rod contact detection.
+
+**"Foosgoos-Architect"** → Keypoint Detection. Upload `datasets/raw/table/`.
+Four keypoints per image, always in the order tl → tr → br → bl. Order
+must match `config.ARCHITECT_KEYPOINTS` or the homography comes out
+rotated, which looks exactly like "the model is bad".
+
+For both: 70/20/10 split, **light** augmentation only (small rotation,
+brightness/contrast). The camera is fixed above the table, so heavy
+geometric warping teaches situations that will never occur. Export as
+YOLOv8 (choose "YOLOv8 Pose" for the Architect). Include some frames with
+no ball at all — negatives teach the model what "no ball" looks like.
+
+---
+
+## Step 6 — Check the export, then train
+
+```bash
+python -m training.dataset_check ./scout_dataset
+```
+
+**Do this before uploading anything.** Almost every "the model came out
+useless" story is a dataset problem visible in thirty seconds: an empty
+split, images that never got labelled, coordinates out of range. It is
+much cheaper to find out here than after an hour of GPU time.
+
+```bash
+modal token new                       # once per person
 
 modal volume create foosgoos-scout-data
 modal volume put foosgoos-scout-data ./scout_dataset /data
 modal run training/train_scout_modal.py
+
+modal volume get foosgoos-scout-weights <path it prints> ./models/gameplay_v1.pt
 ```
 
-Each one trains on an A10G in the cloud and prints a path to `best.pt` when
-it's done. Give it a while - go get lunch, don't babysit the terminal.
+Same shape for the Architect (`--pose` on the check, `table_v1.pt` at the
+end). The filenames match `config.py`; nothing else to change.
 
-## Step 5 - Pull the trained weights down
+Defaults are **yolov8n at 640**, not `s` at 960. This model runs on every
+frame, up to 90 times a second, on the machine bolted to the table. A
+bigger model that drops inference to 12fps is *worse* than a slightly
+less accurate one at 60fps, because a ball moving 15cm per frame can
+cross the entire goal between two processed frames. Measure your real fps
+before reaching for a bigger model.
+
+Keep the previous weights around (`gameplay_v0.pt`). When a retrain comes
+out worse on real footage — it happens — you want to roll back in one
+command, not one more training run.
+
+---
+
+## Step 7 — Tune against recorded footage, not at the table
 
 ```bash
-modal volume get foosgoos-architect-weights <path from step 4> ./models/table_v1.pt
-modal volume get foosgoos-scout-weights <path from step 4> ./models/gameplay_v1.pt
+python -m inference.live_pipeline --source recordings/match_00042_*.mp4
 ```
 
-These filenames already match `config.ARCHITECT_MODEL_PATH` /
-`config.SCOUT_MODEL_PATH` - no code changes needed, just drop them in.
+Replays a real game through the exact same code that runs live and prints
+what it calls. Change a goal line, re-run, see whether the same twelve
+goals still fire. You do not need the table, the camera, or to be in the
+building. A ten-minute game replays in seconds.
 
-## Step 6 - Run it live
+Then measure it properly:
 
 ```bash
-python -m inference.live_pipeline
+python -m evaluation.evaluate_goals --match 42
 ```
 
-This is the actual ref running. It loads both models, runs Architect once at
-startup (and again every `ARCHITECT_REFRESH_INTERVAL_S` seconds, in case the
-table gets bumped) to build the homography, runs Scout every single frame to
-track the ball, and prints `[GOAL]` to the console the moment the ball
-crosses a goal line - plus a guess at which bar it came off of.
+It compares what the camera called against what the humans actually
+recorded in the app, and prints precision, recall and latency:
 
-**Don't trust it blind in a real match yet.** The goal-line and zone values
-in `config.py` are placeholders based on the "5% of table width" example
-from ARCHITECTURE.md - they're not calibrated to our actual table. Add a
-quick `print(nx, ny)` in `live_pipeline.py`, watch a few normalized ball
-positions stream by as we roll the ball around by hand, and adjust
-`GOAL_LINE_BLUE`, `GOAL_LINE_RED`, and the `ZONE_BOUNDARIES_*` dicts in
-`config.py` until they line up with reality.
+```
+  recall     91.7%   (11/12 real goals found)
+  precision  84.6%   (11/13 calls were real)
+  latency    median +0.31s
+```
 
-Heads up: this step will crash on `YOLO(...)` load if `models/table_v1.pt`
-and `models/gameplay_v1.pt` don't exist yet - steps 2 through 5 have to
-happen at least once before this works.
+Read it like this:
+- **low recall, misses at one end** → that goal line is wrong
+- **low recall, ball rarely seen** → the Scout needs more training data
+- **phantom goals in midfield** → tighten `GOAL_MOUTH_Y_*`
+- **phantom goals right after a real one** → raise `GOAL_COOLDOWN_S`
 
-## Step 7 - Wire goals into the actual app
+---
 
-Right now `on_goal_detected()` in `inference/live_pipeline.py` just prints
-to console. Next step is replacing that with a real call into the FastAPI
-backend - either a new endpoint on the `matches` router, or a websocket
-push - so the frontend can pop the `GoalModal` we already built, pre-filled
-with the guessed team + bar, and someone just taps to confirm or correct it
-instead of filling it out from scratch.
+## Step 8 — Run it for real
 
-## Step 8 - The retraining loop, ongoing
+```bash
+python -m vision_service            # add --preview to watch it
+```
 
-Once we're actually playing games with the camera rolling regularly:
+It idles until someone picks four players in the app, then records and
+reports goals for that match. It polls the backend rather than being
+pushed to, so it can reboot or start mid-game and just pick up.
 
-1. Periodically save the interesting/failure-case frames - misses, weird
-   angles, new lighting - into `datasets/raw/gameplay/`.
-2. Re-upload the growing dataset to Roboflow, let our current model
-   pre-label it, and just fix whatever it got wrong.
-3. Re-run the Modal training scripts from Step 4.
-4. Swap in the new `best.pt` files from Step 5.
+This is **assisted** mode. Detected goals land in the app already counted
+but marked `pending_review` with nobody attributed, and a human taps to
+say who scored — or that it was not a goal. Do not read a clean console
+as permission to stop watching the app.
+
+---
+
+## How the goal logic actually works
+
+Two detectors, because one is not enough:
+
+**1. Line crossing.** Tests the *segment* between two consecutive ball
+positions against the goal line. Checking `if ball_x < 0.03` alone silently
+misses fast shots, because at 90fps a hard shot moves ~15cm per frame and
+the ball is frequently never photographed inside the goal.
+
+**2. Disappearance.** The ball was last seen inside the mouth of a goal
+and then vanished for `DISAPPEARANCE_TIMEOUT_S`. This catches what most
+real goals actually look like: the ball drops out of sight into the
+return channel and is never seen crossing anything.
+
+Plus a **plausibility gate**: detections implying the ball moved faster
+than `MAX_BALL_SPEED` (25 table-lengths/sec — roughly twice a hard slam)
+are dropped as the detector latching onto a shirt or a reflection. The
+units are lengths/second, not pixels/frame, so it means the same thing
+whether inference runs at 90fps or 15.
+
+And a **cooldown**, so one physical goal cannot fire eleven times while
+the ball is jostled in the net.
+
+### Why we do not report which rod scored
+
+The rods interleave down the table:
+
+```
+blue goal |  bG   b2   r3   b5   r5   b3   r2   rG  | red goal
+```
+
+Blue's attacking 3-bar sits deep in red's half, right next to red's
+5-bar. "The ball was at x=0.65" does not tell you whose rod touched it —
+two rods belonging to opposite teams are within a few centimetres of each
+other almost everywhere. `zones.rod_hint()` returns `"unknown"` whenever
+two rods are too close to call, and `config.SEND_BAR_HINT` is `False`, so
+we do not send a guess at all. In assisted mode a human taps the right
+bar in one tap; a wrong prefill is worse than none, because they have to
+notice it first, and they will not.
+
+Doing this properly means detecting rod men and watching for the velocity
+discontinuity when one strikes the ball. That is a later phase.
+
+---
+
+## When something is wrong
+
+| Symptom | Look at |
+|---|---|
+| camera will not open | `FOOSGOOS_CAMERA_INDEX` (0/1/2), `FOOSGOOS_CAMERA_BACKEND` |
+| dark or streaky frames | more light, then `EXPOSURE` towards `-7` |
+| "inference is far behind the camera" | smaller model, `SCOUT_IMG_SIZE=480`, drop `--preview` |
+| ball seen in <60% of frames | the Scout needs more varied training data |
+| goals missed at one end only | `GOAL_LINE_*` for that end is wrong |
+| phantom goals | `GOAL_MOUTH_Y_*`, `MAX_BALL_SPEED`, `GOAL_COOLDOWN_S` |
+| coordinates look rotated/mirrored | corners clicked or labelled out of order |
+| "No Architect model and no saved calibration" | run `tools.calibrate_corners` |
+| goals detected but not in the app | check `pending_goals.json` and `FOOSGOOS_API_URL` |
+
+Every threshold above is in `config.py`, and every one of them can be
+overridden with an environment variable for a quick experiment without
+editing the file.

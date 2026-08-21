@@ -8,7 +8,7 @@ from database import get_db
 router = APIRouter(prefix="/stats", tags=["Player Stats"])
 
 
-@router.get("/users")
+@router.get("/users", response_model=PlayerStats)
 def get_player_stats(username: str, db: Session = Depends(get_db)):
     db_user = db.query(UserModel).filter(UserModel.name == username).first()
     if not db_user:

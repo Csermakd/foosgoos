@@ -10,6 +10,12 @@ class PlayerStats(Base):
     goals = Column(Integer, default=0)
     goals_from_offense = Column(Integer, default=0)
     goals_from_defense = Column(Integer, default=0)
+    own_goals = Column(Integer, default=0)
     saves = Column(Integer, default=0)
+
+    # Games played / won, so the leaderboard can show a record without
+    # scanning every match row.
+    matches_played = Column(Integer, default=0)
+    matches_won = Column(Integer, default=0)
 
     player = relationship("User", back_populates="stats")

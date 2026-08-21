@@ -1,20 +1,30 @@
 """
-Cloud-train the "Architect" keypoint model (YOLOv8-Pose) on Modal.
-This is Model 1 from ARCHITECTURE.md - it finds the 4 table corners
-(top_left, top_right, bottom_right, bottom_left) used to build the
-Homography matrix.
+Train the "Architect" - the keypoint model that finds the table's corners.
 
-ONE-TIME PREP:
-  1. In Roboflow, export your Architect project as "YOLOv8 (Pose)".
-     Unzip it locally - you'll get an images/, labels/, and data.yaml.
-  2. modal volume create foosgoos-architect-data
-  3. modal volume put foosgoos-architect-data ./architect_dataset /data
+    python -m training.dataset_check ./architect_dataset --pose
+    modal volume create foosgoos-architect-data
+    modal volume put foosgoos-architect-data ./architect_dataset /data
+    modal run training/train_architect_modal.py
 
-RUN:
-  modal run training/train_architect_modal.py
+    modal volume get foosgoos-architect-weights <path> ./models/table_v1.pt
 
-PULL WEIGHTS DOWN AFTER:
-  modal volume get foosgoos-architect-weights <path printed below> ./models/table_v1.pt
+WHY THIS MODEL EXISTS FOR US:
+
+Our table is not bolted to the floor - it gets nudged most days. A fixed,
+hand-clicked calibration goes stale, and stale corners mean every ball
+coordinate is slightly wrong, which means goal lines drift and goals get
+missed. This model re-finds the corners every few seconds so nobody has
+to think about it.
+
+You can and should ship the assisted pipeline BEFORE this exists, using
+`python -m tools.calibrate_corners` and re-clicking when the table moves.
+Do that first; train this when re-clicking becomes annoying.
+
+The one thing to get right in labelling: the four keypoints must always
+be placed in the SAME order - top-left, top-right, bottom-right,
+bottom-left - matching config.ARCHITECT_KEYPOINTS. Get that wrong on even
+some of the images and the homography comes out rotated or mirrored,
+which looks like "the model is bad" but is really a labelling bug.
 """
 import modal
 
@@ -22,6 +32,7 @@ app = modal.App("foosgoos-architect-training")
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("libgl1", "libglib2.0-0")
     .pip_install("ultralytics", "torch", "torchvision")
 )
 
@@ -31,39 +42,69 @@ weights_volume = modal.Volume.from_name("foosgoos-architect-weights", create_if_
 
 @app.function(
     image=image,
-    gpu="A10G",       # bump to "H100" if you want it, per ARCHITECTURE.md
+    gpu="A10G",
     volumes={"/data": data_volume, "/weights": weights_volume},
     timeout=60 * 60 * 3,
 )
-def train(epochs: int = 150, imgsz: int = 960):
+def train(epochs: int = 150, imgsz: int = 960, patience: int = 30):
+    from pathlib import Path
     from ultralytics import YOLO
 
-    model = YOLO("yolov8n-pose.pt")  # nano is plenty for 4 static keypoints
+    data_yaml = Path("/data/data.yaml")
+    if not data_yaml.exists():
+        raise FileNotFoundError("/data/data.yaml is missing - upload the "
+                                "unzipped Roboflow export.")
+    text = data_yaml.read_text()
+    print(f"--- data.yaml ---\n{text}\n-----------------")
+    if "kpt_shape" not in text:
+        raise ValueError(
+            "This data.yaml has no kpt_shape, so it is an ordinary detection "
+            "export, not a pose one. In Roboflow choose 'YOLOv8 Pose'."
+        )
+
+    # Nano is plenty: four static, high-contrast corners on a fixed
+    # background is about the easiest keypoint task there is. Unlike the
+    # Scout, this runs every few seconds rather than every frame, so its
+    # speed barely matters - but there is nothing to gain from a bigger one.
+    model = YOLO("yolov8n-pose.pt")
     results = model.train(
-        data="/data/data.yaml",
+        data=str(data_yaml),
         epochs=epochs,
         imgsz=imgsz,
         project="/weights/runs",
         name="architect",
-        patience=30,
-        # Sparse augmentation per ARCHITECTURE.md Part 4 - the camera is
-        # statically mounted, so keep transforms small and realistic.
+        patience=patience,
         degrees=5,
         translate=0.05,
         scale=0.1,
         shear=0,
         perspective=0,
-        fliplr=0.0,   # do NOT flip - keypoint order is spatial (tl/tr/br/bl)
+        # NEVER flip: keypoint identity here is spatial. A mirrored image
+        # with unmirrored labels teaches "top-left" to mean "top-right".
+        fliplr=0.0,
+        flipud=0.0,
         mosaic=0.0,
+        hsv_v=0.3,
     )
+
+    metrics = getattr(results, "results_dict", {}) or {}
+    print("\n--- validation metrics ---")
+    for key, value in metrics.items():
+        if "mAP" in key or "precision" in key or "recall" in key:
+            print(f"  {key:<24} {value:.4f}")
+    print("\n  The number that actually matters is not mAP - it is whether "
+          "the corners land in the right CORNERS. Check that with "
+          "`python -m tools.watch_ball` once the weights are in place: the "
+          "four table corners should read (0,0) (1,0) (1,1) (0,1).")
+
     best = f"{results.save_dir}/weights/best.pt"
     weights_volume.commit()
-    print(f"Training complete. Best weights at (inside volume): {best}")
+    print(f"\nBest weights (inside the volume): {best}")
     return best
 
 
 @app.local_entrypoint()
 def main(epochs: int = 150, imgsz: int = 960):
     path = train.remote(epochs=epochs, imgsz=imgsz)
-    print("Done. Pull it locally with:")
+    print("\nPull it down with:")
     print(f"  modal volume get foosgoos-architect-weights {path} ./models/table_v1.pt")

@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 
-import { type PlayerAssignment, type GoalEvent } from "@/types/Game";
+import { type PlayerAssignment, type GoalBar } from "@/types/Game";
 
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ type PlayerGoalStats = {
   ownGoal: number;
 };
 
+/** The bars a human can attribute, plus own goals. */
 type GoalType = keyof PlayerGoalStats;
 
 type GoalButton = {
@@ -63,12 +64,14 @@ type PlayerCardProps = {
 
   stats: PlayerGoalStats;
 
+  /** Identifies the scorer by id, not by name: two people can share a
+   *  name, and the backend attributes goals by user id. */
   onGoal: (
-    playerName: string,
+    playerId: number,
 
     position: "offense" | "defense",
 
-    goalType: GoalEvent["goalType"]
+    goalType: GoalBar | "ownGoal"
   ) => void;
 };
 
@@ -129,7 +132,7 @@ const PlayerCard = ({ player, teamIcon, stats, onGoal }: PlayerCardProps) => {
             key={button.value}
             variant="neutral"
             className={cn(button.value === "ownGoal" ? "text-red-500" : "")}
-            onClick={() => onGoal(player.name, player.position, button.value)}
+            onClick={() => onGoal(player.id, player.position, button.value)}
           >
             {button.label}
           </Button>

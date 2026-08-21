@@ -1,7 +1,11 @@
-ultralytics>=8.2.0
-opencv-python>=4.9.0
-torch
+# Vision service + training tooling.
+# Install into a venv inside ml/:  python -m venv venv && pip install -r requirements.txt
+
+ultralytics>=8.2.0      # YOLOv8 training + inference
+opencv-python>=4.9.0    # camera capture, video IO, homography
+torch                   # ultralytics' backend
 torchvision
-modal
 numpy
-requests
+requests                # talking to the FastAPI backend
+modal                   # cloud GPU training (only needed to train)
+pytest                  # tests/ - the goal logic runs without a camera
