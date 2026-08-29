@@ -1,10 +1,13 @@
 import { useMemo } from "react";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   type GoalEvent,
   type GoalBar,
   type PlayerAssignment,
 } from "@/types/Game";
+import { cn } from "@/lib/utils";
 
 const BARS: { label: string; value: GoalBar }[] = [
   { label: "5 Bar", value: "5bar" },
@@ -41,22 +44,26 @@ const GoalReview = ({ event, roster, onAssign, onReject, onDismiss }: Props) => 
     [scoringTeam, roster]
   );
 
-  const accent =
-    scoringTeam === "blue"
-      ? "border-blue-400 bg-blue-50"
-      : "border-red-400 bg-red-50";
-
   return (
     <div
-      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[min(94vw,44rem)]
-                  rounded-lg border-4 ${accent} shadow-2xl p-4`}
+      className="fixed bottom-6 left-1/2 z-50 w-[min(94vw,44rem)] -translate-x-1/2
+                 overflow-hidden rounded-base border-2 border-border
+                 bg-secondary-background shadow-shadow"
       role="dialog"
       aria-label="Confirm the goal the camera detected"
     >
-      <div className="flex items-baseline justify-between gap-4">
-        <p className="text-lg font-black uppercase">
-          Camera saw a {scoringTeam} goal
-        </p>
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-2 border-b-2 border-border px-4 py-3",
+          scoringTeam === "blue" ? "bg-blue-team-soft" : "bg-red-team-soft"
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <Badge variant={scoringTeam === "blue" ? "blue" : "red"}>
+            {scoringTeam} goal
+          </Badge>
+          <p className="font-heading">Already counted. Who scored it?</p>
+        </div>
         <p className="text-xs text-muted-foreground">
           {event.detector_note ?? "camera"}
           {event.confidence !== null
@@ -64,20 +71,20 @@ const GoalReview = ({ event, roster, onAssign, onReject, onDismiss }: Props) => 
             : ""}
         </p>
       </div>
-      <p className="text-sm text-muted-foreground mb-3">
-        Already counted. Who scored it?
-      </p>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 p-4">
         {candidates.map((player) => (
-          <div key={player.id} className="flex items-center gap-2">
-            <span className="w-32 shrink-0 font-bold truncate">
+          <div
+            key={player.id}
+            className="flex flex-wrap items-center gap-2 rounded-base border-2 border-border bg-sunken px-3 py-2"
+          >
+            <span className="w-32 shrink-0 truncate font-heading">
               {player.name}
             </span>
-            <span className="w-20 shrink-0 text-xs capitalize text-muted-foreground">
+            <span className="w-20 shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
               {player.position}
             </span>
-            <div className="flex gap-1 flex-wrap">
+            <div className="flex flex-wrap gap-2">
               {BARS.map((bar) => (
                 <Button
                   key={bar.value}
@@ -93,13 +100,9 @@ const GoalReview = ({ event, roster, onAssign, onReject, onDismiss }: Props) => 
         ))}
       </div>
 
-      <div className="flex gap-2 mt-4">
-        <Button
-          variant="neutral"
-          className="flex-1 text-red-600"
-          onClick={onReject}
-        >
-          Not a goal — take the point back
+      <div className="flex flex-col gap-2 border-t-2 border-border p-4 sm:flex-row">
+        <Button variant="danger" className="flex-1" onClick={onReject}>
+          Not a goal, take the point back
         </Button>
         <Button variant="neutral" className="flex-1" onClick={onDismiss}>
           Skip (leave unattributed)

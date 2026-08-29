@@ -1,73 +1,203 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Bundled, not linked from Google - the tablet by the table is not always
+   online, and a pixel app falling back to Helvetica is the whole problem
+   this theme is trying to avoid. Latin subsets only. */
+@import "@fontsource/press-start-2p/latin-400.css";
+@import "@fontsource/pixelify-sans/latin-400.css";
+@import "@fontsource/pixelify-sans/latin-500.css";
+@import "@fontsource/pixelify-sans/latin-600.css";
+@import "@fontsource/pixelify-sans/latin-700.css";
+
+/* Pixelify Sans draws "5" as very nearly an "S" - at button size "5 Bar" reads
+   as "S Bar", which is a poor thing to be guessing at mid-rally. Press Start
+   2P's numerals are unambiguous, so borrow just those: a unicode-range of
+   U+0030-0039 hands every digit in the app to it and leaves the letters
+   alone. `size-adjust` matches its larger glyph box to Pixelify's x-height so
+   digits and letters sit on the same line without a step. */
+@font-face {
+  font-family: "Pixel Numerals";
+  src: url("@fontsource/press-start-2p/files/press-start-2p-latin-400-normal.woff2")
+    format("woff2");
+  unicode-range: U+0030-0039;
+  size-adjust: 76%;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+ * Design tokens.
+ *
+ * Every colour, radius and shadow in the app comes from here. Pages must not
+ * hard-code hexes (`bg-[#FEFADC]`) or reach for Tailwind's stock palette
+ * (`bg-gray-700`, `text-blue-400`) - that is how five screens end up with five
+ * different ideas of what "blue" and "the background" mean.
+ *
+ * The look is neo-brutalist: flat colour, a 2px black border on everything,
+ * and a hard offset shadow instead of a blur.
+ * ------------------------------------------------------------------------ */
 :root {
-  --background: oklch(94.27% 0.0268 242.57);
+  /* Surfaces. `background` is the page, `secondary-background` is anything
+     sitting on top of it (cards, inputs, rows). */
+  --background: oklch(98.04% 0.0393 100.85);
   --secondary-background: oklch(100% 0 0);
+  /* A recessed panel - stat blocks, table headers, empty states. */
+  --sunken: oklch(94.97% 0.0524 100.26);
+
   --foreground: oklch(0% 0 0);
+  /* Secondary copy: labels, hints, timestamps. Warm grey so it sits with the
+     cream rather than fighting it. */
+  --muted-foreground: oklch(45.41% 0.0262 89.91);
   --main-foreground: oklch(0% 0 0);
-  --main: oklch(66.9% 0.18368 248.8066);
+  --main: oklch(66.90% 0.1837 248.81);
+
   --border: oklch(0% 0 0);
   --ring: oklch(0% 0 0);
-  --overlay: oklch(0% 0 0 / 0.8);
+  --overlay: oklch(0% 0 0 / 0.6);
   --shadow: 4px 4px 0px 0px var(--border);
-  --chart-1: #0099FF;
-  --chart-2: #FF4D50;
-  --chart-3: #FACC00;
-  --chart-4: #05E17A;
-  --chart-5: #7A83FF;
-  --chart-active-dot: #000;
+
+  /* Teams. Used for scores, rosters, badges and goal review - a blue thing is
+     always this blue, everywhere. */
+  --blue-team: oklch(66.90% 0.1837 248.81);
+  --blue-team-soft: oklch(92.19% 0.0408 243.72);
+  --red-team: oklch(67.34% 0.2142 24.17);
+  --red-team-soft: oklch(91.53% 0.0436 16.23);
+
+  /* Intent. */
+  --success: oklch(79.78% 0.2046 153.05);
+  --success-soft: oklch(93.43% 0.0614 164.77);
+  --danger: oklch(67.34% 0.2142 24.17);
+  --danger-soft: oklch(91.53% 0.0436 16.23);
+
+  /* Podium. */
+  --gold: oklch(86.02% 0.1760 92.29);
+  --gold-soft: oklch(95.07% 0.0919 97.81);
+  --silver: oklch(83.59% 0 0);
+  --silver-soft: oklch(94.61% 0 0);
+  --bronze: oklch(78.52% 0.1530 60.26);
+  --bronze-soft: oklch(92.90% 0.0509 68.09);
+
+  --chart-1: oklch(66.90% 0.1837 248.81);
+  --chart-2: oklch(67.34% 0.2142 24.17);
+  --chart-3: oklch(86.02% 0.1760 92.29);
+  --chart-4: oklch(79.78% 0.2046 153.05);
+  --chart-5: oklch(66.27% 0.1810 277.13);
+  --chart-active-dot: oklch(0% 0 0);
+
+  /* Three type roles, and only three.
+     - display: the arcade voice. Page titles, the wordmark, the score. Press
+       Start 2P is enormously wide per character, so it only ever gets short
+       strings and always needs generous line-height.
+     - heading: pixel, but legible down to badge size. Card titles, buttons,
+       labels, every number.
+     - sans: body copy, help text, and anything the user types into. A pixel
+       font in a paragraph or a text input is a readability tax with no
+       payoff. */
+  --font-display: "Press Start 2P", "Pixelify Sans", ui-monospace, monospace;
+  --font-heading: "Pixel Numerals", "Pixelify Sans", ui-sans-serif, system-ui,
+    sans-serif;
+}
+
+/* Family and weight travel together. `font-heading` used to be a weight-only
+   token, so every existing call site already means "make this a heading" -
+   defining it as a utility keeps all of them working and correctly bold. */
+@utility font-heading {
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+/* Several sprites were drawn against a white page - the players' shorts are
+   opaque white, not transparent - so on the cream background the figure looks
+   like it has a hole punched through it. A zero-blur drop-shadow in four
+   directions traces the alpha silhouette, which both closes the figure and
+   matches the 2px black border the rest of the UI is built from. */
+@utility pixel-outline {
+  filter: drop-shadow(2px 0 0 var(--border)) drop-shadow(-2px 0 0 var(--border))
+    drop-shadow(0 2px 0 var(--border)) drop-shadow(0 -2px 0 var(--border));
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  /* Press Start 2P has no descender room built in; without this, stacked
+     display lines collide. */
+  line-height: 1.35;
 }
 
 .dark {
-  --background: oklch(27.08% 0.0336 240.69);
-  --secondary-background: oklch(23.93% 0 0);
+  --background: oklch(28.91% 0 0);
+  --secondary-background: oklch(34.85% 0 0);
+  --sunken: oklch(23.93% 0 0);
+
   --foreground: oklch(92.49% 0 0);
+  --muted-foreground: oklch(72% 0 0);
   --main-foreground: oklch(0% 0 0);
   --main: oklch(61.9% 0.16907 248.5982);
+
   --border: oklch(0% 0 0);
   --ring: oklch(100% 0 0);
+  --overlay: oklch(0% 0 0 / 0.7);
   --shadow: 4px 4px 0px 0px var(--border);
-  --chart-1: #008AE5;
-  --chart-2: #FF6669;
-  --chart-3: #E0B700;
-  --chart-4: #04C86D;
-  --chart-5: #7A83FF;
-  --chart-active-dot: #fff;
-}
 
-@keyframes gradient-x {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
+  --blue-team: oklch(61.9% 0.16907 248.5982);
+  --blue-team-soft: oklch(42% 0.09 248.6);
+  --red-team: oklch(63% 0.19 24.17);
+  --red-team-soft: oklch(40% 0.11 24.17);
 
-.hover\:animate-gradient-x:hover {
-  animation: gradient-x 5s ease infinite;
+  --success: oklch(72% 0.18 153.05);
+  --success-soft: oklch(42% 0.10 155);
+  --danger: oklch(63% 0.19 24.17);
+  --danger-soft: oklch(40% 0.11 24.17);
+
+  --gold: oklch(78% 0.16 92.29);
+  --gold-soft: oklch(45% 0.09 92.29);
+  --silver: oklch(70% 0 0);
+  --silver-soft: oklch(42% 0 0);
+  --bronze: oklch(70% 0.14 60.26);
+  --bronze-soft: oklch(42% 0.08 60.26);
+
+  --chart-active-dot: oklch(100% 0 0);
 }
 
 @theme inline {
   --color-main: var(--main);
   --color-background: var(--background);
   --color-secondary-background: var(--secondary-background);
+  --color-sunken: var(--sunken);
   --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
   --color-main-foreground: var(--main-foreground);
   --color-border: var(--border);
   --color-overlay: var(--overlay);
   --color-ring: var(--ring);
+
+  --color-blue-team: var(--blue-team);
+  --color-blue-team-soft: var(--blue-team-soft);
+  --color-red-team: var(--red-team);
+  --color-red-team-soft: var(--red-team-soft);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-silver: var(--silver);
+  --color-silver-soft: var(--silver-soft);
+  --color-bronze: var(--bronze);
+  --color-bronze-soft: var(--bronze-soft);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
 
   --spacing-boxShadowX: 4px;
   --spacing-boxShadowY: 4px;
@@ -76,15 +206,27 @@
   --radius-base: 10px;
   --shadow-shadow: var(--shadow);
   --font-weight-base: 500;
-  --font-weight-heading: 700;
 }
-  
+
 @layer base {
   body {
-    @apply text-foreground font-base bg-background;
+    @apply bg-background font-sans text-foreground;
+    font-weight: 500;
   }
 
-  h1, h2, h3, h4, h5, h6{
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-heading;
+    font-weight: 700;
+  }
+
+  /* Pixel art must never be smoothed - the browser's default bilinear scaling
+     turns a 135px sprite blown up to 200px into mush. */
+  img[data-pixel] {
+    image-rendering: pixelated;
   }
 }

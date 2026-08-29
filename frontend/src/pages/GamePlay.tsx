@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
+
 import { type RootState, type AppDispatch } from "@/store";
 import { type GoalBar, type GoalEvent } from "@/types/Game";
 import {
@@ -15,11 +16,15 @@ import { useMatchSocket } from "@/hooks/useMatchSocket";
 import { Button } from "@/components/ui/button";
 import PlayerCard from "@/components/PlayerCard";
 import GoalReview from "@/components/GoalReview";
+import PageShell from "@/components/layout/PageShell";
+import MatchLayout from "@/components/layout/MatchLayout";
+import TableImage from "@/components/TableImage";
+import { PixelIcon } from "@/components/ui/PixelIcon";
+import { sprites } from "@/pixel_assets/sprites";
+import { cn } from "@/lib/utils";
 
-import FooseballTable from "../assets/foosball_table.svg";
 import BlueTeamIcon from "../assets/blue_player.svg";
 import RedTeamIcon from "../assets/red_player.svg";
-import SwitchIcon from "../pixel_assets/buttons/switch_arrow_black.png";
 
 type PlayerGoalStats = {
   "5bar": number;
@@ -36,6 +41,24 @@ const emptyStats = (): PlayerGoalStats => ({
   "2bar": 0,
   ownGoal: 0,
 });
+
+/** The one place a team colour runs at full saturation - it makes the score
+ *  the loudest thing on the screen, which is the point of the screen. */
+const ScoreTile = ({ team, score }: { team: "blue" | "red"; score: number }) => (
+  <div
+    className={cn(
+      "flex w-full max-w-xs items-center justify-between rounded-base border-2 border-border px-4 py-3 shadow-shadow",
+      team === "blue" ? "bg-blue-team" : "bg-red-team"
+    )}
+  >
+    <span className="font-heading uppercase tracking-wide text-main-foreground">
+      {team}
+    </span>
+    <span className="font-display text-3xl leading-none tabular-nums text-main-foreground">
+      {score}
+    </span>
+  </div>
+);
 
 const GamePlay = () => {
   const dispatch: AppDispatch = useDispatch();
@@ -139,111 +162,132 @@ const GamePlay = () => {
     }
   };
 
-  if (matchId === null || !blueDefense || !blueOffense || !redDefense || !redOffense) {
+  if (
+    matchId === null ||
+    !blueDefense ||
+    !blueOffense ||
+    !redDefense ||
+    !redOffense
+  ) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-        <p className="text-red-500 font-bold">
-          No match in progress. Start one from the Create Game screen.
-        </p>
-        <Button onClick={() => navigate("/create-game")}>Start a game</Button>
-      </div>
+      <PageShell title="Live Match" icon={sprites.table} width="regular">
+        <div className="flex flex-col items-center gap-4 rounded-base border-2 border-border bg-sunken px-6 py-12 text-center">
+          <p className="font-heading">No match in progress.</p>
+          <p className="text-sm text-muted-foreground">
+            Pick four players to get a game going.
+          </p>
+          <Button onClick={() => navigate("/create-game")}>Start a game</Button>
+        </div>
+      </PageShell>
     );
   }
 
-  return (
-    <div className="flex items-center justify-center min-h-screen w-screen gap-8 bg-gray-700 p-8">
-      {/* Blue Team */}
-      <div className="flex flex-col items-center gap-8 flex-1">
-        <h2 className="text-4xl font-black text-blue-400 drop-shadow-md">
-          {score.blue}
-        </h2>
-        <PlayerCard
-          player={blueDefense}
-          teamIcon={BlueTeamIcon}
-          stats={playerGoals[blueDefense.id] ?? emptyStats()}
-          onGoal={handleGoalRecord}
-        />
-        <Button
-          variant="neutral"
-          size="icon"
-          onClick={() => dispatch(swapPositions("blue"))}
-        >
-          <img src={SwitchIcon} alt="Switch Blue Team" className="w-6 h-6" />
-        </Button>
-        <PlayerCard
-          player={blueOffense}
-          teamIcon={BlueTeamIcon}
-          stats={playerGoals[blueOffense.id] ?? emptyStats()}
-          onGoal={handleGoalRecord}
-        />
-      </div>
-
-      {/* Center */}
-      <div className="flex flex-col items-center justify-center flex-2">
-        <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wide">
-          <span
-            className={`inline-block w-2 h-2 rounded-full ${
-              cameraConnected ? "bg-green-400" : "bg-gray-400"
-            }`}
-          />
-          <span className="text-white/80">
-            {cameraConnected ? "Live — camera assisted" : "Manual only"}
-          </span>
-        </div>
-
-        <img
-          src={FooseballTable}
-          alt="Foosball Table"
-          className="w-full max-w-xl h-auto drop-shadow-2xl"
-        />
-
-        {error && (
-          <p className="mt-4 text-sm font-bold text-red-300">{error}</p>
+  const cameraStatus = (
+    <div className="flex items-center gap-2 rounded-base border-2 border-border bg-secondary-background px-3 py-2 text-sm font-heading uppercase tracking-wide">
+      <span
+        className={cn(
+          "inline-block size-2.5 rounded-full border-2 border-border",
+          cameraConnected ? "bg-success" : "bg-muted-foreground"
         )}
+      />
+      {cameraConnected ? "Live · camera assisted" : "Manual only"}
+    </div>
+  );
 
-        <div className="flex gap-4 mt-8 w-full max-w-xl">
-          <Button
-            onClick={handleRewind}
-            disabled={events.length === 0}
-            className="flex-1"
-            variant="neutral"
-          >
-            Rewind
-          </Button>
-          <Button
-            onClick={handleFinish}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white border-none"
-          >
-            Finish Match
-          </Button>
-        </div>
-      </div>
+  return (
+    <PageShell
+      title="Live Match"
+      icon={sprites.table}
+      width="full"
+      action={cameraStatus}
+    >
+      <MatchLayout
+        blue={
+          <>
+            <ScoreTile team="blue" score={score.blue} />
+            <PlayerCard
+              player={blueDefense}
+              team="blue"
+              teamIcon={BlueTeamIcon}
+              stats={playerGoals[blueDefense.id] ?? emptyStats()}
+              onGoal={handleGoalRecord}
+            />
+            <Button
+              variant="neutral"
+              size="sm"
+              onClick={() => dispatch(swapPositions("blue"))}
+            >
+              <PixelIcon name="swap" />
+              Swap positions
+            </Button>
+            <PlayerCard
+              player={blueOffense}
+              team="blue"
+              teamIcon={BlueTeamIcon}
+              stats={playerGoals[blueOffense.id] ?? emptyStats()}
+              onGoal={handleGoalRecord}
+            />
+          </>
+        }
+        center={
+          <>
+            <TableImage />
 
-      {/* Red Team */}
-      <div className="flex flex-col items-center gap-8 flex-1">
-        <h2 className="text-4xl font-black text-red-400 drop-shadow-md">
-          {score.red}
-        </h2>
-        <PlayerCard
-          player={redOffense}
-          teamIcon={RedTeamIcon}
-          stats={playerGoals[redOffense.id] ?? emptyStats()}
-          onGoal={handleGoalRecord}
-        />
-        <Button
-          variant="neutral"
-          size="icon"
-          onClick={() => dispatch(swapPositions("red"))}
-        >
-          <img src={SwitchIcon} alt="Switch Red Team" className="w-6 h-6" />
-        </Button>
-        <PlayerCard
-          player={redDefense}
-          teamIcon={RedTeamIcon}
-          stats={playerGoals[redDefense.id] ?? emptyStats()}
-          onGoal={handleGoalRecord}
-        />
-      </div>
+            {error && (
+              <p className="w-full max-w-xl rounded-base border-2 border-border bg-danger-soft px-3 py-2 text-center text-sm font-heading">
+                {error}
+              </p>
+            )}
+
+            <div className="flex w-full max-w-xl flex-col gap-4 sm:flex-row">
+              <Button
+                onClick={handleRewind}
+                disabled={events.length === 0}
+                className="flex-1"
+                size="lg"
+                variant="neutral"
+              >
+                Rewind
+              </Button>
+              <Button
+                onClick={handleFinish}
+                className="flex-1"
+                size="lg"
+                variant="success"
+              >
+                Finish Match
+              </Button>
+            </div>
+          </>
+        }
+        red={
+          <>
+            <ScoreTile team="red" score={score.red} />
+            <PlayerCard
+              player={redOffense}
+              team="red"
+              teamIcon={RedTeamIcon}
+              stats={playerGoals[redOffense.id] ?? emptyStats()}
+              onGoal={handleGoalRecord}
+            />
+            <Button
+              variant="neutral"
+              size="sm"
+              onClick={() => dispatch(swapPositions("red"))}
+            >
+              <PixelIcon name="swap" />
+              Swap positions
+            </Button>
+            <PlayerCard
+              player={redDefense}
+              team="red"
+              teamIcon={RedTeamIcon}
+              stats={playerGoals[redDefense.id] ?? emptyStats()}
+              onGoal={handleGoalRecord}
+            />
+          </>
+        }
+      />
 
       {reviewing && (
         <GoalReview
@@ -270,7 +314,7 @@ const GamePlay = () => {
           onDismiss={() => setDismissed((prev) => [...prev, reviewing.id])}
         />
       )}
-    </div>
+    </PageShell>
   );
 };
 

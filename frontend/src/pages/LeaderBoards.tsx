@@ -1,12 +1,41 @@
 import { useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
+
+import { Badge } from "@/components/ui/badge";
+import { PixelImg } from "@/components/ui/PixelImg";
+import PageShell from "@/components/layout/PageShell";
 import { type RootState, type AppDispatch } from "@/store";
 import { fetchAllUsers } from "@/features/user/userSlice";
-import { Button } from "@/components/ui/button";
+import { sprites } from "@/pixel_assets/sprites";
+import { cn } from "@/lib/utils";
+
+/**
+ * Podium styling, keyed off the finishing position.
+ *
+ * There is only one trophy sprite in `pixel_assets`, so silver and bronze are
+ * derived from it with a filter rather than by asking for two more drawings.
+ * Hue-rotate keeps the pixel edges perfectly crisp - it recolours, it does not
+ * resample.
+ */
+const PODIUM = [
+  { row: "bg-gold-soft", badge: "gold", filter: undefined },
+  {
+    // Darkened, not lightened: the silver row is already near-white, so a
+    // brightened trophy vanished into it.
+    row: "bg-silver-soft",
+    badge: "silver",
+    filter: "grayscale(1) brightness(0.78) contrast(1.15)",
+  },
+  {
+    // `sepia` first flattens the gold to a neutral brown that hue-rotate can
+    // actually steer; rotating the raw yellow barely moved it off gold.
+    row: "bg-bronze-soft",
+    badge: "bronze",
+    filter: "sepia(1) saturate(3.2) hue-rotate(-18deg) brightness(0.72)",
+  },
+] as const;
 
 const LeaderBoards = () => {
-  const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { users, status } = useSelector((state: RootState) => state.users);
 
@@ -17,83 +46,87 @@ const LeaderBoards = () => {
 
   // Sort users by Total Goals (Highest first)
   const sortedUsers = useMemo(() => {
-    return [...users].sort((a, b) => {
-      const goalsA = a.stats?.goals || 0;
-      const goalsB = b.stats?.goals || 0;
-      return goalsB - goalsA; // Descending sort
-    });
+    return [...users].sort(
+      (a, b) => (b.stats?.goals || 0) - (a.stats?.goals || 0)
+    );
   }, [users]);
 
-  // Helper for medal colors
-  const getRankStyle = (index: number) => {
-    if (index === 0) return "bg-yellow-100 border-yellow-400 text-yellow-700"; // Gold
-    if (index === 1) return "bg-gray-100 border-gray-400 text-gray-700"; // Silver
-    if (index === 2) return "bg-orange-100 border-orange-400 text-orange-700"; // Bronze
-    return "bg-white border-gray-100 text-gray-600";
-  };
-
   return (
-    <div className="min-h-screen bg-[#FEFADC] p-8 flex flex-col items-center gap-6">
-      {/* Header */}
-      <div className="w-full max-w-2xl flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-gray-800">Leaderboard</h1>
-        </div>
-        <Button onClick={() => navigate("/")} variant="neutral">
-          Return Home
-        </Button>
-      </div>
-
-      {/* Content */}
+    <PageShell
+      title="Leaderboard"
+      subtitle="Ranked by total goals scored."
+      icon={sprites.trophy}
+      width="regular"
+    >
       {status === "loading" ? (
-        <p className="mt-10 text-gray-500">Updating scores...</p>
+        <p className="py-10 text-center text-muted-foreground">
+          Updating scores...
+        </p>
       ) : (
-        <div className="w-full max-w-2xl flex flex-col gap-3">
-          {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 px-6 py-2 text-sm font-bold text-gray-400 uppercase tracking-wider">
-            <div className="col-span-2 text-center">Rank</div>
-            <div className="col-span-6">Player</div>
-            <div className="col-span-4 text-right">Total Goals</div>
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-12 gap-4 px-4 text-sm font-heading uppercase tracking-wide text-muted-foreground">
+            <div className="col-span-3">Rank</div>
+            <div className="col-span-5">Player</div>
+            <div className="col-span-4 text-right">Goals</div>
           </div>
 
-          {/* The List */}
-          {sortedUsers.map((user, index) => (
-            <div
-              key={user.id}
-              className={`grid grid-cols-12 gap-4 px-6 py-4 rounded-xl border-2 items-center shadow-sm transition-transform hover:scale-[1.01] ${getRankStyle(
-                index
-              )}`}
-            >
-              {/* Rank # */}
-              <div className="col-span-2 text-center font-black text-xl">
-                #{index + 1}
-              </div>
+          {sortedUsers.map((user, index) => {
+            const podium = PODIUM[index];
+            return (
+              <div
+                key={user.id}
+                className={cn(
+                  "grid grid-cols-12 items-center gap-4 rounded-base border-2 border-border px-4 py-3 shadow-shadow",
+                  podium ? podium.row : "bg-secondary-background"
+                )}
+              >
+                <div className="col-span-3 flex items-center gap-2">
+                  {podium ? (
+                    <>
+                      <PixelImg
+                        src={sprites.trophy}
+                        alt={`Rank ${index + 1} trophy`}
+                        className="h-8 w-auto"
+                        style={{ filter: podium.filter }}
+                      />
+                      <Badge variant={podium.badge}>#{index + 1}</Badge>
+                    </>
+                  ) : (
+                    <span className="pl-1 font-heading text-muted-foreground">
+                      #{index + 1}
+                    </span>
+                  )}
+                </div>
 
-              {/* Player Name */}
-              <div className="col-span-6 font-bold text-lg truncate">
-                {user.name}
-              </div>
+                <div className="col-span-5 flex items-center gap-2">
+                  <PixelImg
+                    src={sprites.bluePlayerTorso}
+                    outlined
+                    className="h-8 w-auto shrink-0"
+                  />
+                  <span className="truncate font-heading text-lg">
+                    {user.name}
+                  </span>
+                </div>
 
-              {/* Score */}
-              <div className="col-span-4 text-right">
-                <span className="text-2xl font-black">
-                  {user.stats?.goals || 0}
-                </span>
-                <span className="text-xs ml-1 opacity-70 font-medium">
-                  GOALS
-                </span>
+                <div className="col-span-4 text-right">
+                  <span className="font-display text-xl tabular-nums">
+                    {user.stats?.goals || 0}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {sortedUsers.length === 0 && (
-            <div className="text-center py-10 text-gray-500 bg-white rounded-xl border-2 border-gray-100">
-              No players found. Go create some users!
+            <div className="flex flex-col items-center gap-3 rounded-base border-2 border-border bg-sunken py-10 text-center text-muted-foreground">
+              <PixelImg src={sprites.trophy} className="h-14 w-auto opacity-40" />
+              No players yet. Create some users to get started.
             </div>
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
