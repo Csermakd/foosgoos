@@ -1,6 +1,7 @@
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Input } from '@/components/ui/input';
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 
 type PlayerSelectProps = {
   label: string;
@@ -31,27 +32,31 @@ const PlayerSelect = ({ label, players, value, onChange }: PlayerSelectProps) =>
           }
       }
   }, [open]);
-  
+
   useEffect(() => {
     if (open) {
       const timer = setTimeout(() => {
           inputRef.current?.focus();
       }, 10);
-      document.addEventListener('keydown', handleGlobalKeydown);            
+      document.addEventListener('keydown', handleGlobalKeydown);
       return () => {
           clearTimeout(timer);
           document.removeEventListener('keydown', handleGlobalKeydown);
       };
-      
+
     } else {
       setQuery('');
     }
   }, [open, handleGlobalKeydown]);
 
   return (
-    <div>
-      <label>{label}</label>
-      <Select value={value} onValueChange={onChange} onOpenChange={setOpen} open={open}> 
+    <div className="flex w-full flex-col gap-1.5">
+      {/* Was a bare <label> inheriting nothing, so slot labels rendered at a
+          different size and weight to every other label in the app. */}
+      <label className="text-sm font-heading uppercase tracking-wide text-muted-foreground">
+        {label}
+      </label>
+      <Select value={value} onValueChange={onChange} onOpenChange={setOpen} open={open}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Select a player" />
         </SelectTrigger>

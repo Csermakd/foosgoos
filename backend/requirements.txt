@@ -1,5 +1,7 @@
 fastapi
 uvicorn
+opencv-python
+ultralytics
 sqlalchemy>=2.0
 pydantic>=2.0
 requests

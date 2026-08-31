@@ -1,42 +1,81 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
-import { Button } from "@/components/ui/button";
-import { type RootState } from "@/store";
+import { useDispatch, useSelector } from "react-redux";
 
-type MatchRecord = {
-  id: number;
-  timestamp: string;
-  winner_team: "blue" | "red" | "NONE";
-  score_blue: number;
-  score_red: number;
-  player1_id: number;
-  player2_id: number;
-  player3_id: number;
-  player4_id: number;
+import { Badge } from "@/components/ui/badge";
+import { PixelImg } from "@/components/ui/PixelImg";
+import PageShell from "@/components/layout/PageShell";
+import { sprites } from "@/pixel_assets/sprites";
+import { fetchAllUsers } from "@/features/user/userSlice";
+import { type AppDispatch, type RootState } from "@/store";
+import { type Match } from "@/types/Game";
+import { cn } from "@/lib/utils";
+
+type TeamSide = {
+  label: string;
+  score: number;
+  offense: string;
+  defense: string;
+  won: boolean;
+  tone: "blue" | "red";
 };
 
+const TeamColumn = ({ label, score, offense, defense, won, tone }: TeamSide) => (
+  <div className="flex-1 text-center">
+    <Badge variant={tone}>{label}</Badge>
+    <div className="my-2 flex items-center justify-center gap-3">
+      <PixelImg
+        src={tone === "blue" ? sprites.bluePlayerTorso : sprites.redPlayerTorso}
+        outlined
+        className={cn("h-10 w-auto", !won && "opacity-45")}
+      />
+      <span
+        className={cn(
+          "font-display text-3xl tabular-nums",
+          won ? "text-foreground" : "text-muted-foreground"
+        )}
+      >
+        {score}
+      </span>
+    </div>
+    <div className="flex flex-col gap-0.5 text-sm text-muted-foreground">
+      <span>
+        Offense <span className="font-heading text-foreground">{offense}</span>
+      </span>
+      <span>
+        Defense <span className="font-heading text-foreground">{defense}</span>
+      </span>
+    </div>
+  </div>
+);
+
 const Stats = () => {
-  const navigate = useNavigate();
-  const [matches, setMatches] = useState<MatchRecord[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Get the list of users from Redux so we can translate IDs to Names
-  const users = useSelector((state: RootState) => state.users.users);
+  // Get the list of users from Redux so we can translate IDs to Names.
+  // Landing here directly - a refresh, a bookmark - used to render every
+  // roster slot as "Unknown", because only the home screen fetched them.
+  const dispatch: AppDispatch = useDispatch();
+  const { users, status } = useSelector((state: RootState) => state.users);
 
-  // Helper to find name by ID
-  const getName = (id: number) => {
-    const found = users.find((u) => u.id === id);
-    return found ? found.name : "Unknown";
-  };
+  useEffect(() => {
+    if (status === "idle") dispatch(fetchAllUsers());
+  }, [dispatch, status]);
+
+  const getName = (id: number) =>
+    users.find((u) => u.id === id)?.name ?? "Unknown";
 
   useEffect(() => {
     const fetchMatches = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/matches/`);
+        // Only finished games. Matches now exist from the moment the
+        // players are picked, so an unfiltered fetch would list the game
+        // being played right now - and any abandoned one - as a result.
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/matches/?status=completed`
+        );
         if (res.ok) {
-          const data = await res.json();
-          setMatches(data);
+          setMatches(await res.json());
         }
       } catch (error) {
         console.error("Failed to load matches", error);
@@ -48,20 +87,21 @@ const Stats = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#FEFADC] p-8 flex flex-col items-center gap-6">
-      <div className="w-full max-w-4xl flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">Recent Matches</h1>
-        <Button onClick={() => navigate("/")} variant="neutral">
-          Return Home
-        </Button>
-      </div>
-
+    <PageShell
+      title="Recent Matches"
+      subtitle="Every completed game, newest first."
+      icon={sprites.table}
+      width="wide"
+    >
       {loading ? (
-        <p>Loading match history...</p>
+        <p className="py-10 text-center text-muted-foreground">
+          Loading match history...
+        </p>
       ) : (
-        <div className="w-full max-w-4xl grid gap-4">
+        <div className="grid gap-4">
           {matches.length === 0 && (
-            <div className="text-center text-gray-500 py-10">
+            <div className="flex flex-col items-center gap-3 rounded-base border-2 border-border bg-sunken py-10 text-center text-muted-foreground">
+              <PixelImg src={sprites.table} className="h-16 w-auto opacity-40" />
               No matches recorded yet.
             </div>
           )}
@@ -69,63 +109,44 @@ const Stats = () => {
           {matches.map((match) => (
             <div
               key={match.id}
-              className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between border-2 border-gray-100"
+              className="flex items-center justify-between rounded-base border-2 border-border bg-secondary-background p-4 shadow-shadow"
             >
-              {/* Blue Team Info */}
-              <div className="flex-1 text-center">
-                <h3 className="font-bold text-blue-600 text-lg">Blue Team</h3>
-                <div className="text-4xl font-black text-gray-800 my-2">
-                  {match.score_blue}
-                </div>
-                <div className="flex flex-col gap-1 text-sm text-gray-600">
-                  <span>
-                    Offense: <b>{getName(match.player1_id)}</b>
-                  </span>
-                  <span>
-                    Defense: <b>{getName(match.player2_id)}</b>
-                  </span>
-                </div>
-              </div>
+              <TeamColumn
+                label="Blue"
+                tone="blue"
+                score={match.score_blue}
+                offense={getName(match.player1_id)}
+                defense={getName(match.player2_id)}
+                won={match.winner_team === "blue"}
+              />
 
-              {/* VS Badge */}
-              <div className="flex flex-col items-center px-6">
-                <span className="text-sm font-bold text-gray-400">VS</span>
-                <span className="text-xs text-gray-300 mt-1">
+              <div className="flex flex-col items-center gap-2 px-4 sm:px-6">
+                <span className="text-sm font-heading text-muted-foreground">
+                  VS
+                </span>
+                <span className="text-xs text-muted-foreground">
                   {new Date(match.timestamp).toLocaleDateString()}
                 </span>
                 {match.winner_team !== "NONE" && (
-                  <span
-                    className={`mt-2 px-2 py-1 rounded text-xs font-bold text-white ${
-                      match.winner_team === "blue"
-                        ? "bg-blue-500"
-                        : "bg-red-500"
-                    }`}
-                  >
-                    {match.winner_team.toUpperCase()} WON
-                  </span>
+                  <Badge variant={match.winner_team === "blue" ? "blue" : "red"}>
+                    {match.winner_team} won
+                  </Badge>
                 )}
               </div>
 
-              {/* Red Team Info */}
-              <div className="flex-1 text-center">
-                <h3 className="font-bold text-red-600 text-lg">Red Team</h3>
-                <div className="text-4xl font-black text-gray-800 my-2">
-                  {match.score_red}
-                </div>
-                <div className="flex flex-col gap-1 text-sm text-gray-600">
-                  <span>
-                    Offense: <b>{getName(match.player3_id)}</b>
-                  </span>
-                  <span>
-                    Defense: <b>{getName(match.player4_id)}</b>
-                  </span>
-                </div>
-              </div>
+              <TeamColumn
+                label="Red"
+                tone="red"
+                score={match.score_red}
+                offense={getName(match.player3_id)}
+                defense={getName(match.player4_id)}
+                won={match.winner_team === "red"}
+              />
             </div>
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

@@ -1,19 +1,27 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+
 import { Button } from "@/components/ui/button";
 import PlayerSelect from "@/components/PlayerSelect";
-import { setPlayers } from "@/features/game/gameSlice";
-// UPDATED: Removed space from filename import
-import FooseballTable from "../assets/foosball_table.svg";
+import TeamPanel from "@/components/TeamPanel";
+import MatchLayout from "@/components/layout/MatchLayout";
+import TableImage from "@/components/TableImage";
+import { sprites } from "@/pixel_assets/sprites";
+import PageShell from "@/components/layout/PageShell";
+import {
+  startMatch,
+  resumeActiveMatch,
+  abandonMatch,
+  fetchActiveMatch,
+} from "@/features/game/gameSlice";
+import { fetchAllUsers } from "@/features/user/userSlice";
+import { type RootState, type AppDispatch } from "@/store";
+
 import BlueTeamIcon from "../assets/blue_player.svg";
 import RedTeamIcon from "../assets/red_player.svg";
-import { type RootState } from "@/store";
 
-type Props = {};
-
-const CreateGame = (props: Props) => {
-  // Updated selector to match userSlice structure
+const CreateGame = () => {
   const { users: allUsers, status } = useSelector(
     (state: RootState) => state.users
   );
@@ -24,7 +32,17 @@ const CreateGame = (props: Props) => {
   const [redPlayer2Name, setRedPlayer2Name] = useState<string>("");
 
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const dispatch: AppDispatch = useDispatch();
+  const [submitting, setSubmitting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  // Set when a previous game was never finished - a closed tab, a crash,
+  // someone wandering off. Without a way out of this, every future
+  // "Start Game" would fail with a 409 and no obvious remedy.
+  const [strandedMatch, setStrandedMatch] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (status === "idle") dispatch(fetchAllUsers());
+  }, [dispatch, status]);
 
   const playerOptions = allUsers.map((user) => user.name);
 
@@ -40,14 +58,21 @@ const CreateGame = (props: Props) => {
       (p) => !selectedPlayers.includes(p) || p === currentSelection
     );
 
-  const allChosen =
-    bluePlayer1Name && bluePlayer2Name && redPlayer1Name && redPlayer2Name;
+  const isFormValid = Boolean(
+    bluePlayer1Name && bluePlayer2Name && redPlayer1Name && redPlayer2Name
+  );
 
-  const isFormValid = Boolean(allChosen);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  /**
+   * Starting a game now creates the match on the SERVER first, before
+   * anyone plays a point. That is what gives the camera something to
+   * attach goals and a video recording to - the vision service polls
+   * /matches/active and starts working the moment this succeeds.
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
+    if (!isFormValid || submitting) return;
+    setSubmitting(true);
+    setStartError(null);
 
     const getUserByName = (name: string) => {
       const user = allUsers.find((u) => u.name === name);
@@ -57,8 +82,8 @@ const CreateGame = (props: Props) => {
     };
 
     try {
-      dispatch(
-        setPlayers({
+      await dispatch(
+        startMatch({
           blue: [
             {
               name: bluePlayer1Name,
@@ -84,107 +109,157 @@ const CreateGame = (props: Props) => {
             },
           ],
         })
-      );
+      ).unwrap();
       navigate("/game-play");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error starting game. Please refresh and try again.");
+      setStartError(
+        err?.message ?? "Could not start the game. Is the backend running?"
+      );
+      // The most likely cause by far is a game somebody never finished.
+      // Ask the server directly rather than parsing the error text - the
+      // wording of a message is not an API.
+      try {
+        const active = await dispatch(fetchActiveMatch()).unwrap();
+        setStrandedMatch(active ? active.id : null);
+      } catch {
+        setStrandedMatch(null);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResume = async () => {
+    try {
+      await dispatch(resumeActiveMatch(allUsers)).unwrap();
+      navigate("/game-play");
+    } catch (err: any) {
+      setStartError(err?.message ?? "Could not resume that game");
+      setStrandedMatch(null);
+    }
+  };
+
+  const handleAbandon = async () => {
+    if (strandedMatch === null) return;
+    try {
+      await dispatch(abandonMatch(strandedMatch)).unwrap();
+      setStartError(null);
+      setStrandedMatch(null);
+    } catch (err: any) {
+      setStartError(err?.message ?? "Could not abandon that game");
     }
   };
 
   if (status === "loading") {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#FEFADC]">
-        Loading players...
-      </div>
+      <PageShell title="New Game" icon={sprites.table} width="full">
+        <p className="py-10 text-center text-muted-foreground">
+          Loading players...
+        </p>
+      </PageShell>
     );
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen w-screen gap-8 bg-[#FEFADC]">
-      {/* Blue Team Selection */}
-      <div className="flex flex-col items-center gap-8 flex-1">
-        <div className="flex flex-col items-center gap-4 w-full">
-          <div className="flex flex-col items-center gap-2 w-full">
-            <img
-              src={BlueTeamIcon}
-              alt="Blue Defense"
-              className="w-8 h-8 mx-auto"
-            />
+    <PageShell
+      title="New Game"
+      subtitle="Pick all four players, then start the match."
+      icon={sprites.table}
+      width="full"
+    >
+      <MatchLayout
+        blue={
+          <TeamPanel team="blue" title="Blue Team" icon={BlueTeamIcon}>
             <PlayerSelect
-              label="Blue Defense"
+              label="Defense"
               players={getAvailablePlayers(bluePlayer1Name)}
               value={bluePlayer1Name}
               onChange={setBluePlayer1Name}
             />
-          </div>
-          <div className="flex flex-col items-center gap-2 w-full">
-            <img
-              src={BlueTeamIcon}
-              alt="Blue Offense"
-              className="w-8 h-8 mx-auto"
-            />
             <PlayerSelect
-              label="Blue Offense"
+              label="Offense"
               players={getAvailablePlayers(bluePlayer2Name)}
               value={bluePlayer2Name}
               onChange={setBluePlayer2Name}
             />
-          </div>
-        </div>
-      </div>
+          </TeamPanel>
+        }
+        center={
+          <>
+            <TableImage />
 
-      {/* Center Table */}
-      <div className="flex flex-col items-center justify-center flex-2 bg-[#FEFADC] rounded-xl shadow-md p-8">
-        <img
-          src={FooseballTable}
-          alt="Foosball Table"
-          className="w-full max-w-xl h-auto"
-        />
-        <form onSubmit={handleSubmit} className="mt-8 w-full">
-          {!isFormValid && (
-            <p className="text-sm text-muted-foreground mb-4 text-center">
-              Pick all four players.
-            </p>
-          )}
-          <Button type="submit" disabled={!isFormValid} className="w-full">
-            Start Game
-          </Button>
-        </form>
-      </div>
+            <form onSubmit={handleSubmit} className="w-full max-w-xl">
+              {startError && (
+                <div className="mb-4 rounded-base border-2 border-border bg-danger-soft p-3">
+                  <p className="text-center text-sm font-heading">
+                    {startError}
+                  </p>
+                  {strandedMatch !== null && (
+                    <>
+                      <p className="mt-1 text-center text-xs text-muted-foreground">
+                        Somebody left a game open. Pick it back up, or throw it
+                        away and start fresh.
+                      </p>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <Button
+                          type="button"
+                          variant="neutral"
+                          className="flex-1"
+                          onClick={handleResume}
+                        >
+                          Resume that game
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          className="flex-1"
+                          onClick={handleAbandon}
+                        >
+                          Abandon it
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
-      {/* Red Team Selection */}
-      <div className="flex flex-col items-center gap-8 flex-1">
-        <div className="flex flex-col items-center gap-4 w-full">
-          <div className="flex flex-col items-center gap-2 w-full">
-            <img
-              src={RedTeamIcon}
-              alt="Red Offense"
-              className="w-8 h-8 mx-auto"
-            />
+              <Button
+                type="submit"
+                size="lg"
+                disabled={!isFormValid || submitting}
+                className="w-full"
+              >
+                {submitting ? "Starting..." : "Start Game"}
+              </Button>
+
+              {!isFormValid && (
+                <p className="mt-2 text-center text-sm text-muted-foreground">
+                  Pick all four players.
+                </p>
+              )}
+            </form>
+          </>
+        }
+        red={
+          <TeamPanel team="red" title="Red Team" icon={RedTeamIcon}>
             <PlayerSelect
-              label="Red Offense"
+              label="Offense"
               players={getAvailablePlayers(redPlayer1Name)}
               value={redPlayer1Name}
               onChange={setRedPlayer1Name}
             />
-          </div>
-          <div className="flex flex-col items-center gap-2 w-full">
-            <img
-              src={RedTeamIcon}
-              alt="Red Defense"
-              className="w-8 h-8 mx-auto"
-            />
             <PlayerSelect
-              label="Red Defense"
+              label="Defense"
               players={getAvailablePlayers(redPlayer2Name)}
               value={redPlayer2Name}
               onChange={setRedPlayer2Name}
             />
-          </div>
-        </div>
-      </div>
-    </div>
+          </TeamPanel>
+        }
+      />
+    </PageShell>
   );
 };
+
 export default CreateGame;
